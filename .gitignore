@@ -4,12 +4,12 @@
 data_files/
 
 #Do not ignore the following in data files
-!data_files/initial_data/barcodes/HaCat_A_barcodes.txt
-!data_files/initial_data/barcodes/HaCat_A_barcodes.txt
+!*/data_files/initial_data/barcodes/HaCat_A_barcodes.txt
+!*/data_files/initial_data/barcodes/HaCat_A_barcodes.txt
 
-!data_files/initial_data/chrM_unique.txt
-!data_files/initial_data/Original_cell_cycle_genes_with_new_candidates.txt
-!data_files/initial_data/smooth_params.txt
+!*/data_files/initial_data/chrM_unique.txt
+!*/data_files/initial_data/Original_cell_cycle_genes_with_new_candidates.txt
+!*/data_files/initial_data/smooth_params.txt
 
 
 #Ignore for now, will release on publication
