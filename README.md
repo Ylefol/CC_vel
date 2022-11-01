@@ -86,6 +86,8 @@ These scripts were meant as a template for users, where they can familiarize the
 
 
 
+## Tutorial DynaPhase_analysis
+An R script is provided to generate the dotplots shown in our article. These dotplots served as a means to perform a gprofiler REACTOME based over-representation analysis for the genes which peaked in each cell cycle phase separately. We used this to validate our cell cycle pseudotime.
 
 
 
