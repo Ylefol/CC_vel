@@ -16,9 +16,14 @@ data_files/initial_data/barcodes/*
 !/data_files/initial_data/barcodes/HaCat_A_barcodes.txt
 !/data_files/initial_data/barcodes/HaCat_B_barcodes.txt
 
+!data_files/REAC_pathways
 
 #Ignore for now, will release on publication
 data_files/initial_data/loom_files/HaCat_A.loom
 data_files/initial_data/loom_files/HaCat_B.loom
 
+#Ignore R shenanigans
+.rhistory
 
+#Ignore results
+all_figures

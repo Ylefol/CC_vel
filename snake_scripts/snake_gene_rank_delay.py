@@ -34,6 +34,9 @@ mean_dict,CI_dict,bool_dict,count_dict,boundary_dict=my_utils.get_CI_data (cell_
 
 my_ranked_genes=my_func.create_gene_ranking(count_dict,mean_dict,CI_dict,Sc_dict,number_of_iterations)
 
+vlm_dict=my_utils.get_vlm_values(cell_line, layers,folder_to_use )
+t_test_res=my_func.create_t_test_rank_method(my_ranked_genes,number_of_iterations,replicates,mean_dict,CI_dict,boundary_dict,vlm_dict)
+
 # my_start_phases=identify_vel_start_phases=my_func.identify_vel_start_phases(count_dict,mean_dict,CI_dict,boundary_dict)
 
 #Identify significant genes
@@ -46,16 +49,12 @@ my_ranked_genes=my_func.create_gene_ranking(count_dict,mean_dict,CI_dict,Sc_dict
 
 my_delay_df=my_func.create_delay_dataframe(count_dict)
 
-#Plot all delays
-# my_func.plot_raincloud_delay(my_delay_df,cell_line,save_name='all_delays_'+folder_to_use)
-
-#Plot significant delays
-# my_significant_delays=my_delay_df[my_delay_df["gene_name"].isin(significant_genes)]
-# my_func.plot_raincloud_delay(my_significant_delays,cell_line,save_name='delay_sig_genes_'+folder_to_use)
-
 
 my_ranked_genes.to_csv(sys.argv[3],index=False)
 my_delay_df.to_csv(sys.argv[4],index=False)
+t_test_res.to_csv(sys.argv[5],index=False)
+
+t_test_res.to_csv('data_files/data_results/rank/'+cell_line+'/'+folder_to_use+'_t_test_results.csv')
 
 
 
