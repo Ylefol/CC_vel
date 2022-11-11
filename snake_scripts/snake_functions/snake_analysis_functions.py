@@ -1145,7 +1145,7 @@ def target_scan_analysis(TS_path,gene_dict,cell_line,miR_thresh,miRNA_list=None)
 
 #%% Plotting functions
 
-def plot_raincloud_delay(delay_dict,cell_line,plot_name='',save_path='',save_name=''):
+def plot_raincloud_delay(delay_df,cell_line,plot_name='',save_path='',save_name=''):
     """
     Function which plots four raincloud plots illustrating the different types of
     delays found in unspliced and spliced datasets.
@@ -1176,19 +1176,20 @@ def plot_raincloud_delay(delay_dict,cell_line,plot_name='',save_path='',save_nam
     """
     
     #Log transform the data
-    dta1 = my_utils.log10_dta(delay_dict,'inc_to_0')
-    dta2 = my_utils.log10_dta(delay_dict,'inc_to_+1')
-    dta3 = my_utils.log10_dta(delay_dict,'dec_to_0')
-    dta4 = my_utils.log10_dta(delay_dict,'dec_to_-1')
+    dta1 = my_utils.log10_dta(delay_df,'inc_to_0')
+    dta2 = my_utils.log10_dta(delay_df,'inc_to_+1')
+    dta3 = my_utils.log10_dta(delay_df,'dec_to_0')
+    dta4 = my_utils.log10_dta(delay_df,'dec_to_-1')
+    
+    
+
     
     num_genes=len(dta1)
     if plot_name=='':
         plot_name="Raincloud plots gene delay ("+str(num_genes)+" genes)"
     if save_name=='':
         save_name='Raincloud_plot.png'
-    
-    
-    
+        
     data_to_plot = [dta1, dta2, dta3, dta4]
     
     #Set the style/background of the plot
@@ -1213,7 +1214,7 @@ def plot_raincloud_delay(delay_dict,cell_line,plot_name='',save_path='',save_nam
         plot_path=save_path
     if not os.path.exists(plot_path):
         os.makedirs(plot_path, exist_ok=True)
-    plt.savefig(os.path.join(plot_path,save_name),bbox_inches='tight')
+    plt.savefig(os.path.join(plot_path,save_name+'.png'),bbox_inches='tight')
     plt.clf()
     plt.close("all")
     # plt.show()
@@ -1223,6 +1224,9 @@ def plot_raincloud_delay(delay_dict,cell_line,plot_name='',save_path='',save_nam
     mpl.rc_file_defaults()
     
     
+    spearman_and_plot_delays(delay_df,'inc_to_+1','dec_to_0',save_path=plot_path,save_name=save_name+'_active_transcription_correlation.png')
+    spearman_and_plot_delays(delay_df,'inc_to_0','dec_to_-1',save_path=plot_path,save_name=save_name+'_no_transcription_correlation.png')
+
     
 def plot_layer_plot(ax,df_dict,boundary_dict,gene_name,orientation):
     """
@@ -2325,13 +2329,19 @@ def spearman_and_plot_delays(delay_file,delay_cat_1,delay_cat_2,save_path,save_n
     
     import seaborn as sns
     sns.set_theme(color_codes=True)
-    ax = sns.regplot(x="inc_to_+1", y="dec_to_0", data=delay_file,truncate=False,scatter_kws={"color": "#4d73b0"}, line_kws={"color": "black"})
+    ax = sns.regplot(x=delay_cat_1, y=delay_cat_2, data=delay_file,truncate=False,scatter_kws={"color": "#4d73b0"}, line_kws={"color": "black"})
     plt.text(x_min, y_max, 'correlation: '+str(corr_val)+'\npvalue: '+str(pval),
              bbox=dict(facecolor='none', edgecolor='black'))
     plt.xlabel(delay_cat_1)
     plt.ylabel(delay_cat_2)
-    plt.savefig(save_path+'/'+save_name+'.png')
+    plt.savefig(save_path+'/'+save_name)
+    plt.clf()
+    plt.close("all")
+    # plt.show()
+    gc.collect()
     
+    #Resets the 'theme' for the plots as to not interfere with downstream plots
+    mpl.rc_file_defaults()
     
 def spearman_comp_delay_with_UTR(UTR_file,sig_delays,delay_cat='inc_to_+1'):
     """
@@ -2443,47 +2453,50 @@ def compare_UTR_based_on_delay(UTR_file,sig_delays,delay_cat,delay_thresh):
     print(stats.mannwhitneyu(UTR_arr_pos,UTR_arr_neg))
 
 
-def fishers_exact_cell_lines(cell_line_1,cell_line_2):
+def chi_square_cell_lines(cell_line_1,folder_1,cell_line_2,folder_2):
     """
-    Function which performs a fisher's exact test between the significant genes
+    Function which performs a chi square test between the significant genes
     found in two cell lines of choice.
     
     The function will retrieve the set score results for the two cell lines then 
-    remove any genes which are unique for either cell line. Using the balanced gene
-    list, a contingency table is built and the fisher's exact test results for all
-    three alternative hypotheses is printed to the console.
+    remove any genes which are unique for either cell line. A contingency table is built 
+    and the chi square results are returned.
 
     Parameters
     ----------
     cell_line_1 : string
         String definining one of the two cell lines to be compared.
+    folder_1 : string
+        String definining the folder (replicate) to use for the first cell line
     cell_line_2 : string
         String definining one of the two cell lines to be compared.
+    folder_2 : string
+        String definining the folder (replicate) to use for the second cell line
 
     Returns
     -------
     None.
 
     """
-    ranks_line_1=pd.read_csv('data_files/data_results/rank/'+cell_line_1+'_ranked_genes.csv')
-    ranks_line_2=pd.read_csv('data_files/data_results/rank/'+cell_line_2+'_ranked_genes.csv')
+    ranks_line_1=pd.read_csv('data_files/data_results/rank/'+cell_line_1+'/'+folder_1+'_t_test_results.csv')
+    ranks_line_2=pd.read_csv('data_files/data_results/rank/'+cell_line_2+'/'+folder_2+'_t_test_results.csv')
     
-    #Find common genes
-    common_genes=[]
-    for gene in ranks_line_1.gene_name.values:
-        if gene in ranks_line_2.gene_name.values:
-            common_genes.append(gene)
+    # #Find common genes
+    # common_genes=[]
+    # for gene in ranks_line_1.gene_name.values:
+    #     if gene in ranks_line_2.gene_name.values:
+    #         common_genes.append(gene)
+            
+    # #Filter files to contain only common genes across cell lines
+    # ranks_line_1=ranks_line_1[ranks_line_1.gene_name.isin(common_genes)]
+    # ranks_line_2=ranks_line_2[ranks_line_2.gene_name.isin(common_genes)]
     
-    #Filter files to contain only common genes across cell lines
-    ranks_line_1=ranks_line_1[ranks_line_1.gene_name.isin(common_genes)]
-    ranks_line_2=ranks_line_2[ranks_line_2.gene_name.isin(common_genes)]
-    
-    sig_genes_line_1=list(ranks_line_1.gene_name[ranks_line_1.high_score>0])
-    non_sig_genes_line_1=list(ranks_line_1.gene_name[ranks_line_1.high_score==0])
+    sig_genes_line_1=list(ranks_line_1.gene_name[ranks_line_1.t>0])
+    non_sig_genes_line_1=list(ranks_line_1.gene_name[ranks_line_1.t==0])
     
     
-    sig_genes_line_2=list(ranks_line_2.gene_name[ranks_line_2.high_score>0])
-    non_sig_genes_line_2=list(ranks_line_2.gene_name[ranks_line_2.high_score==0])
+    sig_genes_line_2=list(ranks_line_2.gene_name[ranks_line_2.t>0])
+    non_sig_genes_line_2=list(ranks_line_2.gene_name[ranks_line_2.t==0])
 
     yes_1_yes_2=0
     yes_1_no_2=0
@@ -2504,72 +2517,56 @@ def fishers_exact_cell_lines(cell_line_1,cell_line_2):
     
     
     #Build contingency table
-    fish_table=np.array([[yes_1_yes_2,yes_2_no_1],[yes_1_no_2,no_1_no_2]])
-    print(fish_table)
-    print(cell_line_1+' vs '+cell_line_2)
-    print('#############')
-    print('greater/right')
-    print(stats.fisher_exact(fish_table, alternative='greater'))
-    print('#############')
-    print('less/left')
-    print(stats.fisher_exact(fish_table, alternative='less'))
-    print('#############')
-    print('two-sided')
-    print(stats.fisher_exact(fish_table, alternative='two-sided'))
-    print('-------------')
+    cont_table=np.array([[yes_1_yes_2,yes_2_no_1],[yes_1_no_2,no_1_no_2]])
+    res=stats.chi2_contingency(cont_table)
+    
+    return res
 
 
 
 
-def fisher_exact_cell_line_phases(cell_line_1,cell_line_2,data_type,phase_check,comparison_cat):
+def chi_square_cell_line_phases(cell_line_1,folder_1,cell_line_2,folder_2,phase_check,comparison_cat):
     """
-    A function which performs a fisher's exact test for the phase overlap
+    A function which performs a chi square test for the phase overlap
     of genes found in two different cell lines. 
     The function first removes any genes unique to either cell line.
-    It then takes in the comparison category and the phase to check, the comparison
-    category is the column from the z-score for which the phase overlap should be 
-    performed. While the phase check shows which phase is being tested.
+    It then takes in the comparison category and the phase to check.
     
-    The function will build the contingency table accordingle and print the
-    results for the three types of alternative hypothesis to the console
+    The function will build the contingency table accordingle and return the chi square results.
 
     Parameters
     ----------
     cell_line_1 : string
         String definining one of the two cell lines to be compared.
+    folder_1 : string
+        String definining the folder (replicate) to use for the first cell line
     cell_line_2 : string
         String definining one of the two cell lines to be compared.
-    data_type : string
-        String for either 'z_score' or 'peak_expression' indicating which
-        data type will be used for the fisher's exact test'
+    folder_2 : string
+        String definining the folder (replicate) to use for the second cell line
     phase_check : string
         The phase to be used to check overlap (G1,S,G2M).
     comparison_cat : string
-        A string indication which column of the z-score to be used to measure overlap.
-        This will always be 'phase' if data_type is 'peak_expression'
+        A string indication which phase association to use. Phase at peak velocity (phase_peak_vel),
+        phase at peak expression (phase_peak_exp), or phase at start of active transcription (phase_start_vel)
 
     Returns
     -------
     None.
 
     """
-    if data_type == 'z_score':
-        ranks_line_1=pd.read_csv('data_files/data_results/rank/'+cell_line_1+'_ranked_genes.csv')
-        ranks_line_2=pd.read_csv('data_files/data_results/rank/'+cell_line_2+'_ranked_genes.csv')
-    elif data_type == 'peak_expression':
-        ranks_line_1=pd.read_csv('data_files/data_results/peak_expression/'+cell_line_1+'_peak_expression_phase.csv')
-        ranks_line_2=pd.read_csv('data_files/data_results/peak_expression/'+cell_line_2+'_peak_expression_phase.csv')
-        comparison_cat='phase'
+    ranks_line_1=pd.read_csv('data_files/data_results/rank/'+cell_line_1+'/'+folder_1+'_t_test_results.csv')
+    ranks_line_2=pd.read_csv('data_files/data_results/rank/'+cell_line_2+'/'+folder_2+'_t_test_results.csv')
+
+    # #Find common genes
+    # common_genes=[]
+    # for gene in ranks_line_1.gene_name.values:
+    #     if gene in ranks_line_2.gene_name.values:
+    #         common_genes.append(gene)
     
-    #Find common genes
-    common_genes=[]
-    for gene in ranks_line_1.gene_name.values:
-        if gene in ranks_line_2.gene_name.values:
-            common_genes.append(gene)
-    
-    #Filter files to contain only common genes across cell lines
-    ranks_line_1=ranks_line_1[ranks_line_1.gene_name.isin(common_genes)]
-    ranks_line_2=ranks_line_2[ranks_line_2.gene_name.isin(common_genes)]
+    # #Filter files to contain only common genes across cell lines
+    # ranks_line_1=ranks_line_1[ranks_line_1.gene_name.isin(common_genes)]
+    # ranks_line_2=ranks_line_2[ranks_line_2.gene_name.isin(common_genes)]
     
     genes_to_check=list(ranks_line_1.gene_name)
     
@@ -2601,17 +2598,7 @@ def fisher_exact_cell_line_phases(cell_line_1,cell_line_2,data_type,phase_check,
             no_1_no_2+=1
     
     #Build contingency table
-    fish_table=np.array([[yes_1_yes_2,yes_2_no_1],[yes_1_no_2,no_1_no_2]])
-    print(fish_table)
-    print(cell_line_1+' vs '+cell_line_2+' for phase '+phase_check+' using category '+comparison_cat)
-    print('#############')
-    print('greater/right')
-    print(stats.fisher_exact(fish_table, alternative='greater'))
-    print('#############')
-    print('less/left')
-    print(stats.fisher_exact(fish_table, alternative='less'))
-    print('#############')
-    print('two-sided')
-    print(stats.fisher_exact(fish_table, alternative='two-sided'))
-    print('-------------')
+    cont_table=np.array([[yes_1_yes_2,yes_2_no_1],[yes_1_no_2,no_1_no_2]])
+    res=stats.chi2_contingency(cont_table)
 
+    return res

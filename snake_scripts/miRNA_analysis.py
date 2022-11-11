@@ -14,7 +14,7 @@ import os
 import numpy as np
 import pandas as pd
 
-cell_line='HaCat'
+cell_line='HeLaKO'
 # cell_line=key
 #Find replicates
 replicates=os.listdir('data_files/confidence_intervals/'+cell_line)
@@ -23,7 +23,7 @@ replicates.remove('merged_results')
 layers=['spliced','unspliced']
 
 
-folder_to_use='A_B'
+folder_to_use='A'
 
 mean_dict,CI_dict,bool_dict,count_dict,boundary_dict=my_utils.get_CI_data (cell_line, layers, folder_to_use)
 my_ranked_genes=pd.read_csv('data_files/data_results/rank/'+cell_line+'/'+folder_to_use+'_ranked_genes.csv')
@@ -33,7 +33,7 @@ t_test_res=pd.read_csv('data_files/data_results/rank/'+cell_line+'/'+folder_to_u
 
 res = [i for i in t_test_res.padjusted if i != 'NA']
 good_vals=[x for x in res if x<0.01]
-significant_genes=list(t_test_res.loc[t_test_res['padjusted'] .isin(good_vals)].index)
+significant_genes=list(t_test_res.loc[t_test_res['padjusted'] .isin(good_vals)].gene_name)
 
 
 # plot miRNA boxplots for rankable genes

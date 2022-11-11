@@ -1,6 +1,6 @@
 #Dependencies
 
-setwd("~/A_Projects/BiGR/R_code_dotplot")
+setwd("~/A_Projects/BiGR/BiGR_vel")
 
 library("reshape2")
 library("ggplot2")
@@ -47,7 +47,7 @@ runProfiler2<- function(Genelist, Group.No, max_p_value=0.05){
 cellcycle.rea <- getParticipants("R-HSA-1640170", retrieval = "EventsInPathways")
 cellcycle.ids <- c("R-HSA-1640170", cellcycle.rea$stId)
 
-HaCaT <- na.omit(read.table("~/A_Projects/BiGR/snakemake_work_folder/data_files/data_results/rank/HaCat/A_B_t_test_results.csv", header=T, sep=","))
+HaCaT <- na.omit(read.table("data_files/data_results/rank/HaCat/A_B_t_test_results.csv", header=T, sep=","))
 
 #spliced_up_CI_phase  => "Upper confidence interval is below 0 -> negative velocity"
 
@@ -121,3 +121,20 @@ cc.r_HaCat <- unique(unlist(lapply(go.results.dynphase.rea_HaCat, GetCCReactome)
 cc.top_HaCat <- unique(na.omit(unlist(lapply(lapply(go.results.dynphase.rea_HaCat, function(x) x[x$term_name %in% cc.r_HaCat, ]), GetTopTerms, 10))))
 ggsave("HaCat-DynPhases_reactome_CC.pdf", PlotTerms(go.results.dynphase.rea_HaCat, cc.top_HaCat, phases=combPhases_HaCat), width=9, height=7)
 
+
+
+#Compare cell lines with peak expression
+c293T <- na.omit(read.table("data_files/data_results/rank/293t/A_B_C_D_t_test_results.csv", header=T, sep=","))
+Jurkat <- na.omit(read.table("data_files/data_results/rank/jurkat/A_B_C_D_t_test_results.csv", header=T, sep=","))
+go.results.comb <-
+  lapply(list(HaCaT=HaCaT, "293T"=c293T, Jurkat=Jurkat),
+         function(cell) sapply(unique(na.omit(cell$phase_peak_exp)), function(x) runProfiler2(as.character(cell$gene_name[cell$phase_peak_exp %in% x]), x, 0.05), simplify=F))
+go.results.comb.rea <- lapply(go.results.comb, function(res) lapply(res, function(x) {x<-x[x$source %in% "REAC",]; x[order(x$p_value),]}))
+go.results.comb.bp <- lapply(go.results.comb, function(res) lapply(res, function(x) {x<-x[x$source %in% "GO:BP",]; x[order(x$p_value),]}))
+
+cc.r2 <- unique(unlist(lapply(go.results.comb.rea, function(x) lapply(x, GetCCReactome))))
+cc.top2 <- unique(na.omit(unlist(lapply(go.results.comb.rea, function(list) lapply(lapply(list[phases], function(x) x[x$term_name %in% cc.r2, ]), GetTopTerms, 10)))))
+ggsave("All_reactome_CC_peak_exp.pdf", PlotTerms(go.results.comb.rea, na.omit(cc.top2), MeltProfiler2), width=10, height=6)
+
+top2 <- unique(unlist(lapply(go.results.comb.rea, function(x) lapply(x, GetTopTerms, 5))))
+ggsave("All_reactome_peak_exp.pdf", PlotTerms(go.results.comb.rea, na.omit(top2), MeltProfiler2), width=10, height=6)

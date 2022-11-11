@@ -22,6 +22,12 @@ data_files/initial_data/barcodes/*
 data_files/initial_data/loom_files/HaCat_A.loom
 data_files/initial_data/loom_files/HaCat_B.loom
 
+#Ignore logs
+logs
+
+#Ignore snakemake metadata
+.snakemake
+
 #Ignore R shenanigans
 .rhistory
 
