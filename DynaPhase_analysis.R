@@ -84,7 +84,8 @@ PlotTerms <- function(list, terms, melter=MeltProfiler1, phases=c("G1", "S", "G2
   pd$term_name <- factor(pd$term_name, levels=rev(unique(pd$term_name)), ordered=TRUE)
 
   p <- ggplot(pd, aes(L1, term_name)) + geom_point(aes(color=logP, size=OR)) + theme_bw() + scale_colour_gradient(low=("blue"), high=("red")) +
-    labs(x="Phase", y="Reactome pathway", color=expression(paste(-log[10], " FDR")), size="OR")
+    labs(x="Phase", y="Reactome pathway", color=expression(paste(-log[10], " FDR")), size="OR") +
+    theme(text = element_text(size = 15))
   if ("L2" %in% colnames(pd)) {
      p <- p + facet_grid(.~L2) 
   }
@@ -104,7 +105,7 @@ ggsave("HaCat_reactome_CC_peak_exp.pdf", PlotTerms(go.results.peaks.rea[phases],
 
 
 top <- unique(unlist(lapply(go.results.peaks.rea, GetTopTerms, 5)))
-ggsave("HaCat_reactome_peak_exp.pdf", PlotTerms(go.results.peaks.rea[phases], top), width=7.5, height=7)
+ggsave("HaCat_reactome_peak_exp.pdf", PlotTerms(go.results.peaks.rea[phases], top), width=7.5, height=9)
 
 
 #HaCaT Dynamic phases
@@ -115,7 +116,7 @@ go.results.dynphase.rea_HaCat <- lapply(go.results.dynphase_HaCaT, function(x) {
 combPhases_HaCat <- paste(sapply(phases, rep, 3), phases, sep="\n")
 
 top_HaCat <- unique(unlist(lapply(go.results.dynphase.rea_HaCat, GetTopTerms)))
-ggsave("HaCat-DynPhases_reactome.pdf", PlotTerms(go.results.dynphase.rea_HaCat, top_HaCat, phases=combPhases_HaCat), width=9, height=10)
+ggsave("HaCat-DynPhases_reactome.pdf", PlotTerms(go.results.dynphase.rea_HaCat, top_HaCat, phases=combPhases_HaCat), width=12, height=10)
 
 cc.r_HaCat <- unique(unlist(lapply(go.results.dynphase.rea_HaCat, GetCCReactome)))
 cc.top_HaCat <- unique(na.omit(unlist(lapply(lapply(go.results.dynphase.rea_HaCat, function(x) x[x$term_name %in% cc.r_HaCat, ]), GetTopTerms, 10))))
@@ -136,5 +137,5 @@ cc.r2 <- unique(unlist(lapply(go.results.comb.rea, function(x) lapply(x, GetCCRe
 cc.top2 <- unique(na.omit(unlist(lapply(go.results.comb.rea, function(list) lapply(lapply(list[phases], function(x) x[x$term_name %in% cc.r2, ]), GetTopTerms, 10)))))
 ggsave("All_reactome_CC_peak_exp.pdf", PlotTerms(go.results.comb.rea, na.omit(cc.top2), MeltProfiler2), width=10, height=6)
 
-top2 <- unique(unlist(lapply(go.results.comb.rea, function(x) lapply(x, GetTopTerms, 5))))
-ggsave("All_reactome_peak_exp.pdf", PlotTerms(go.results.comb.rea, na.omit(top2), MeltProfiler2), width=10, height=6)
+top2 <- unique(unlist(lapply(go.results.comb.rea, function(x) lapply(x, GetTopTerms, 10))))
+ggsave("All_reactome_peak_exp.pdf", PlotTerms(go.results.comb.rea, na.omit(top2), MeltProfiler2), width=10, height=10)

@@ -563,15 +563,16 @@ def create_read_UTR_results(cell_line,target_rep,gtf_path,gene_list):
         The calculated 3'UTR lengths along with some extra gtf related information.
 
     """
-    UTR_file_name=cell_line+'/'+target_rep+'_UTR_length.csv'
+    UTR_file_name=target_rep+'_UTR_length.csv'
     if os.path.isdir('data_files/data_results/UTR_length/'+cell_line)==False:
         my_utils.create_folder('data_files/data_results/UTR_length/'+cell_line)
         
     if UTR_file_name in os.listdir('data_files/data_results/UTR_length/'+cell_line):
-        UTR_df=pd.read_csv('data_files/data_results/UTR_length/'+UTR_file_name)
+        UTR_df=pd.read_csv('data_files/data_results/UTR_length/'+cell_line+'/'+UTR_file_name)
     else:
         find_three_UTR_lengths(gtf_path,gene_list,output_path='data_files/data_results/UTR_length/'+UTR_file_name)
         UTR_df=pd.read_csv('data_files/data_results/UTR_length/'+UTR_file_name)
+        
     
     return UTR_df
 
@@ -1846,6 +1847,8 @@ def create_miRweight_boxplot(vari_df, weight_dict, target_key, cell_line,plot_na
 
 
 
+
+
 def create_REAC_summary_plots(value_dict,boundary_dict,layer='spliced',second_layer=None,orientation='G1',plot_path='REAC_folder/'):
     """
     Function which plots the genes of a REACTOME pathway as well as the mean gene
@@ -2376,7 +2379,7 @@ def spearman_comp_delay_with_UTR(UTR_file,sig_delays,delay_cat='inc_to_+1'):
     
     x_arr=np.asarray(UTR_sub.Length)
     y_arr=np.asarray(delay_sub[delay_cat])
-    print(stats.spearmanr(x_arr,y_arr))
+    return stats.spearmanr(x_arr,y_arr)
 
 
 
@@ -2450,7 +2453,7 @@ def compare_UTR_based_on_delay(UTR_file,sig_delays,delay_cat,delay_thresh):
     delay_genes_neg=[list(sig_delays.gene_name)[i] for i in list(delay_idx_neg[0])]
     UTR_arr_neg=np.asarray(sig_UTRs.Length[sig_UTRs.gene_name.isin(delay_genes_neg)])
     
-    print(stats.mannwhitneyu(UTR_arr_pos,UTR_arr_neg))
+    return stats.mannwhitneyu(UTR_arr_pos,UTR_arr_neg)
 
 
 def chi_square_cell_lines(cell_line_1,folder_1,cell_line_2,folder_2):

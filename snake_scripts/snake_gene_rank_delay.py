@@ -54,7 +54,7 @@ my_ranked_genes.to_csv(sys.argv[3],index=False)
 my_delay_df.to_csv(sys.argv[4],index=False)
 t_test_res.to_csv(sys.argv[5],index=False)
 
-t_test_res.to_csv('data_files/data_results/rank/'+cell_line+'/'+folder_to_use+'_t_test_results.csv')
+# t_test_res.to_csv('data_files/data_results/rank/'+cell_line+'/'+folder_to_use+'_t_test_results.csv')
 
 
 
