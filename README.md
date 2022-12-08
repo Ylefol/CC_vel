@@ -46,7 +46,7 @@ The two next thresholds will be based on the violin plot representing unspliced 
 NOTE: Thresholds should be in percents, a value of 0.25 should be inputed as 25
 
 
-###Rule #2
+### Rule #2
 The next rule is much simpler. This rule performs the RNA velocity to perform a validation of the cell cycle pseudotime and also serves as a means to identify the number of neighbours to use to identify the best RNA velocity patterns.
 RNA velocity looks for the directionality of each cell based on the nearest neighbour approach, however we can specify the number of neighbours to look at and this is dependant on the number of cells in each dataset. With a dataset of ~1500 cells (post filer/first rule) we found that a num_k of 550 worked well, so roughly 1/3 of the dataset.
 
@@ -54,14 +54,14 @@ RNA velocity looks for the directionality of each cell based on the nearest neig
 This rule is run on two cores to perform both A and B at the same time.
 
 
-###Rule #3
+### Rule #3
 This rule performs the number of necessary iterations for each replicate that will be merged downstream (in the next rule). Here we have to specify the same k as in Rule #2 as well as the number of desired iterations. We found 5 to be adequate for clean datasets, though higher numbers may be beneficial for other datasets.
 
 `snakemake data_files/confidence_intervals/HaCat/{A,B}/Iterations --cores 2`
 
 Note that this rule can get RAM intensive depending on the datasets and therefore the numbers of cores should be used with caution.
 
-###Rule #4
+### Rule #4
 This rule merges the various replicates of the dataset, in our case, A and B.
 Along with the merger, it calculates the confidence interval, which can be customized based on the set z value.
 
@@ -70,12 +70,12 @@ To merge A and B, the rule is run as follows.
 If one were to calculate gene velocity without merging replicates, the rule can be run using only A or B (or whatever other replicate naming convention)
 
 
-###Rule #5
+### Rule #5
 This rule calculates several results that may be used in custom analyses. It starts by calculating the delay of each gene (distance between unspliced and spliced at a cross-over point) as well as performing a ranking using a t-test. Along with the t-test, it determines where genes peak in expression along the cell cycle.
 
 `snakemake data_files/data_results/rank/HaCat/A_B_ranked_genes.csv --cores 1`
 
-###Rule #6
+### Rule #6
 Rule #6 is not part of the standard pipeline, but is instead part of a microRNA analysis. This rule takes in smallRNAseq data along with targetscan data. It then creates csv files of microRNAs which fit within a specified threshold ex: 0_100 or 1000_None). These files contain the microRNAs which fit within the threshold and that have been categorized.
 
 
