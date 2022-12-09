@@ -1,18 +1,18 @@
-# BiGR_vel
-BiGR_vel takes in single cell RNAseq data, establishes a cell cycle based pseudotime and calculates the cell cycle time derivative for each gene.
+# CC_vel - Cell-Cycle Velocity
+CC_vel takes in single cell RNAseq data, establishes a cell cycle based pseudotime and calculates the cell cycle time derivative for each gene.
 
 
 ## Overview
-BiGR_vel was developed within the BiGR group at NTNU. It takes in loom files generate by the velocyto command line using a list of snakemake rules found [here](https://github.com/gcfntnu/single-cell/blob/master/rules/quant/velocyto.rules).
-BiGR_vel then creates a cell cycle based pseudotime using the expression of know cell cycle genes. This is followed up by a RNA velocity analysis using velocyto and finalized by the calculation of gene time derivative throughout the established cell cycle pseudotime
+CC_vel was developed within the BiGR group at NTNU. It takes in loom files generate by the velocyto command line using a list of snakemake rules found [here](https://github.com/gcfntnu/single-cell/blob/master/rules/quant/velocyto.rules).
+CC_vel then creates a cell cycle based pseudotime using the expression of know cell cycle genes. This is followed up by a RNA velocity analysis using velocyto and finalized by the calculation of gene time derivative throughout the established cell cycle pseudotime
 
 ## Merging of replicates
-RNA velocity and gene velocity have the consequence of being unreliable with current data. To accommodate for this, BiGR_vel allows the use of multiple replicates and multiple iterations. During the development of this tool, we used two technical replicates of a HaCat cell line. We established a cell cycle pseudotime for each technical replicate and performed RNA velocity on each in order to verify their similarity. We then proceeded to calculate gene velocity and merge these values across replicates and iterations.
+RNA velocity and gene velocity have the consequence of being unreliable with current data. To accommodate for this, CC_vel allows the use of multiple replicates and multiple iterations. During the development of this tool, we used two technical replicates of a HaCat cell line. We established a cell cycle pseudotime for each technical replicate and performed RNA velocity on each in order to verify their similarity. We then proceeded to calculate gene velocity and merge these values across replicates and iterations.
 
 The calculation of gene velocity depends on RNA velocity, which it depends on some random variables, we therefore perform several (5) iterations for each replicate and then proceed to merge the now 10 runs. This merged data now represents gene velocity along with a confidence interval allowing for better certainty of the observed values.
 
 ## Installation
-BiGR_vel does not come in a library or package format, it is instead a set of snakemake rules. To use this tool it is advised to create a mniniconda environment and install the packages listed in the 'Dependencies' section fo this ReadMe. With this done, this repository can be cloned and each snakemake rule can be run one at a time. A detailed workflow of which rules to run, how to run them, and their requirements are listed below in the 'Tutorial' section.
+CC_vel does not come in a library or package format, it is instead a set of snakemake rules. To use this tool it is advised to create a mniniconda environment and install the packages listed in the 'Dependencies' section fo this ReadMe. With this done, this repository can be cloned and each snakemake rule can be run one at a time. A detailed workflow of which rules to run, how to run them, and their requirements are listed below in the 'Tutorial' section.
 
 
 ## Dependencies

@@ -14,7 +14,7 @@ import os
 import numpy as np
 import pandas as pd
 
-cell_line='HeLaKO'
+cell_line='jurkat'
 # cell_line=key
 #Find replicates
 replicates=os.listdir('data_files/confidence_intervals/'+cell_line)
@@ -23,7 +23,7 @@ replicates.remove('merged_results')
 layers=['spliced','unspliced']
 
 
-folder_to_use='A'
+folder_to_use='A_B_C_D'
 
 mean_dict,CI_dict,bool_dict,count_dict,boundary_dict=my_utils.get_CI_data (cell_line, layers, folder_to_use)
 my_ranked_genes=pd.read_csv('data_files/data_results/rank/'+cell_line+'/'+folder_to_use+'_ranked_genes.csv')
@@ -65,10 +65,3 @@ my_func.wrapper_miRNA_boxplot_analysis(cell_line,replicates,layers,folder_to_use
 miRNA_thresh_list=['1000_None','100_1000','0_100']
 save_path='all_figures/'+cell_line+'/analysis_results/'+folder_to_use+'/miRNA_significant_genes_plots'
 my_func.wrapper_miRNA_boxplot_analysis(cell_line,replicates,layers,folder_to_use,'Both',miRNA_thresh_list,save_path,gene_selection=significant_genes,single_rep=False)
-
-
-
-#########UTR SHOULD BE ADDED TO THE ANALYSIS SCRIPT
-#Commented out since it may be removed down the line - not needed for now
-# my_UTRs=my_func.create_read_UTR_results(cell_line,folder_to_use,gtf_path,list(my_ranked_genes.gene_name))
-
