@@ -12,7 +12,7 @@ RNA velocity and gene velocity have the consequence of being unreliable with cur
 The calculation of gene velocity depends on RNA velocity, which it depends on some random variables, we therefore perform several (5) iterations for each replicate and then proceed to merge the now 10 runs. This merged data now represents gene velocity along with a confidence interval allowing for better certainty of the observed values.
 
 ## Installation
-CC_vel does not come in a library or package format, it is instead a set of snakemake rules. To use this tool it is advised to create a mniniconda environment and install the packages listed in the 'Dependencies' section fo this ReadMe. With this done, this repository can be cloned and each snakemake rule can be run one at a time. A detailed workflow of which rules to run, how to run them, and their requirements are listed below in the 'Tutorial' section.
+CC_vel does not come in a library or package format, it is instead a set of snakemake rules. To use this tool it is advised to create a miniconda environment and install the packages listed in the 'Dependencies' section fo this ReadMe. With this done, this repository can be cloned and each snakemake rule can be run one at a time. A detailed workflow of which rules to run, how to run them, and their requirements are listed below in the 'Tutorial' section.
 
 
 ## Dependencies
@@ -80,9 +80,9 @@ Rule #6 is not part of the standard pipeline, but is instead part of a microRNA 
 
 
 ## Tutorial - analysis
-Using the results from the above rules, we can create non-default results using either the analysis script or the miRNA analysis script (if miRNA results are desired).
+Using the results from the above rules, we can create non-default results using either of the three analysis script or the miRNA analysis script (if miRNA results are desired).
 The analysis scripts show how to retrieve the data that was generated and show some basic plots that have already been designed.
-These scripts were meant as a template for users, where they can familiarize themselves with the plots and then perform their own analyses with the generated results.
+These scripts were meant as a template for users, where they can familiarize themselves with the plots and then perform their own analyses with the generated results. These scripts vary from single cell_line analysis to cross cell-line analysis.
 
 
 
@@ -90,6 +90,8 @@ These scripts were meant as a template for users, where they can familiarize the
 An R script is provided to generate the dotplots shown in our article. These dotplots served as a means to perform a gprofiler REACTOME based over-representation analysis for the genes which peaked in each cell cycle phase separately. We used this to validate our cell cycle pseudotime.
 
 
+## Tutorial TCGA_dta_download_analysis
+An R script which downloads TCGA gene expression data from all registered cancers in the database. It then performs a standard differential gene expression analysis between normal sample and tumor samples. These results are the saved for future comparisons in the python analysis scripts.
 
 
 

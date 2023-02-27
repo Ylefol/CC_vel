@@ -33,3 +33,6 @@ logs
 
 #Ignore results
 all_figures
+
+#Ignore big TCGA file
+R_scripts/TCGA_all_dta.rda

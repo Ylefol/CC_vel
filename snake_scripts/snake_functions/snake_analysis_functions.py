@@ -1959,6 +1959,74 @@ def create_REAC_summary_plots(value_dict,boundary_dict,layer='spliced',second_la
         gc.collect()
 
 
+def plot_phase_exp_raincloud(exp_matrix,target_genes,phase_boundaries,plot_title='',save_name=''):
+    """
+    Function which plots a rainfall plot split into three cell cycle phases. The function
+    takes in the primary expression matrix, a list of gene subsets (to filter the matrix),
+    as well as the phase boundaries, plot title, and the name of the file for saving the plot.
+
+    Parameters
+    ----------
+    exp_matrix : pandas dataframe
+        A dataframe containing the expression results with cells as rows and genes as columns
+    target_genes : pandas series
+        A series of genes to subset the expression matrix with
+    phase_boundaries : dictionnary
+        The cell boundaries for G1, S, and G2M.
+    plot_name : string, optional
+        Title shown on the plot. The default is ''.
+    save_path : string, optional
+        path to a save location. The default is ''.
+
+    Returns
+    -------
+    None.
+
+    """
+    #Start by setting up the data, one df per phase
+    data_to_plot=[]
+    for phase in list(['G1','S','G2M']): #Setting custom order for better representation
+        #Identify start and end of boundary
+        start=phase_boundaries[phase]
+        if phase=='G1':
+            end=phase_boundaries['S']-1
+        elif phase=='S':
+            end=len(exp_matrix.index)
+        else:
+            end=phase_boundaries['G1']-1
+        
+        sub_matrix=exp_matrix[target_genes]
+        sub_matrix=sub_matrix.iloc[start:end]
+        sub_dta=sub_matrix.mean(axis=0)
+        sub_dta= my_utils.log10_dta(sub_dta,None)
+        
+        data_to_plot.append(sub_dta)
+
+    #Set the style/background of the plot
+    sns.set(style="whitegrid",font_scale=2)
+
+    #Create the plot
+    f, ax = plt.subplots(figsize=(15, 5))
+    ax=pt.RainCloud(data = data_to_plot, palette = 'Set2', bw = 0.3, width_viol = .6, ax = ax, orient = 'v',offset=0.12)
+    # set style for the axes
+    labels = ['G1', 'S', 'G2M']
+    for ax in [ax]:
+        ax.xaxis.set_tick_params(direction='out')
+        ax.xaxis.set_ticks_position('bottom')
+        ax.set_xticklabels(labels)
+        
+    plt.title(plot_title)
+    plt.ylabel('log10(phase expression)')
+
+    plt.savefig(save_name,bbox_inches='tight')
+    plt.clf()
+    plt.close("all")
+    # plt.show()
+    gc.collect()
+
+    #Resets the 'theme' for the plots as to not interfere with downstream plots
+    mpl.rc_file_defaults()
+
 
 #%% Wrapper functions for analysis
 
@@ -2605,3 +2673,83 @@ def chi_square_cell_line_phases(cell_line_1,folder_1,cell_line_2,folder_2,phase_
     res=stats.chi2_contingency(cont_table)
 
     return res
+
+def create_TCGA_comparison_stat_results(cell_line_gene_dict,DEG_file_name,universe):
+    """
+    Function intended to be used with a DEGc file from a TCGA analysis. However this
+    function can be used for any comparisons. The function will compare each cell line
+    with a given file name (which must have an ID column). The function will perform
+    a chi-square test to measure the overlap between each cell line (split per cell 
+    cycle phase) and the given gene list. Genes for the cell lines will be split
+    based on the cell cycle phase for which they have their highest expression point.
+    A universe must also be provided for the function. The universe is (normally) 
+    comprised of all unique genes found in each cell line.
+    
+    The function will return a dictionnary with the observed, expected, and 
+    associated pvalue.
+
+    Parameters
+    ----------
+    cell_line_gene_dict : Dictionnary
+        Dictionnary containing the three cell lines results. The file is expected to 
+        be the t_test_results.csv file per cell line. These are expected to be in 
+        pandas dataframe format
+    DEG_file_name : string
+        path to the file containing the gene list to compare with.
+    universe : pandas dataframe
+        Dataframe containing the universe to be used in the chi-square analysis.
+
+    Returns
+    -------
+    A dictionnary containing the observed, expected, and pvalue for each comparison.
+    Comparisons are each cell cycle phase at each cell line
+
+    """
+    gene_lst_1=pd.read_csv(DEG_file_name)
+    gene_lst_1=list(gene_lst_1.ID)
+    gene_lst_1=set(gene_lst_1)
+    
+    universe=set(universe)
+    universe=list(universe)
+    
+    comp_res_dict={'Cell_line':[],'Phase':[],'Observed':[],'Expected':[],'pvalue':[]}
+    for cell_line in list(cell_line_gene_dict.keys()):
+        for phase in ['G1','S','G2M']:
+            #Create subsets
+            gene_df=cell_line_gene_dict[cell_line]
+            gene_df=gene_df[gene_df.padjusted<0.01]
+            gene_lst_2=list(gene_df.gene_name[gene_df.phase_peak_exp==phase])
+    
+            #Set up variables
+            yes_1_yes_2=0
+            yes_1_no_2=0
+            yes_2_no_1=0
+            no_1_no_2=0
+            
+            #Prepare for contingency table
+            for gene in universe:
+                if gene in gene_lst_1 and gene in gene_lst_2:
+                    yes_1_yes_2+=1
+                elif gene in gene_lst_1 and gene not in gene_lst_2:
+                    yes_1_no_2+=1
+                elif gene not in gene_lst_1 and gene in gene_lst_2:
+                    yes_2_no_1+=1
+                elif gene not in gene_lst_1 and gene not in gene_lst_2:
+                    no_1_no_2+=1
+                
+            #Build contingency table and run stat
+            cont_table=np.array([[yes_1_yes_2,yes_2_no_1],[yes_1_no_2,no_1_no_2]])
+            res=stats.chi2_contingency(cont_table)
+            
+            #Build list of results - observed expected pvalue
+            expected_yes_yes=res[3][0][0]
+            observed_yes_yes=yes_1_yes_2
+            pvalue=res[1]
+            #Add results to dictionnary
+            comp_res_dict['Cell_line'].append(cell_line)
+            comp_res_dict['Phase'].append(phase)
+            comp_res_dict['Observed'].append(observed_yes_yes)
+            comp_res_dict['Expected'].append(expected_yes_yes)
+            comp_res_dict['pvalue'].append(pvalue)
+            
+    return(comp_res_dict)

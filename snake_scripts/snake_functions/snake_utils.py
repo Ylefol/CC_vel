@@ -347,8 +347,10 @@ def log10_dta(delay_df,key):
         The log10 transformed data.
 
     """
-
-    og_arr=np.asarray(delay_df[key])
+    if key==None:
+        og_arr=np.asarray(delay_df)
+    else:
+        og_arr=np.asarray(delay_df[key])
     test_dta=np.log10(abs(og_arr))
     
     new_dta=[]
