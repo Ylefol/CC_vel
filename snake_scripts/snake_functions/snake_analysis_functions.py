@@ -1959,7 +1959,7 @@ def create_REAC_summary_plots(value_dict,boundary_dict,layer='spliced',second_la
         gc.collect()
 
 
-def plot_phase_exp_raincloud(exp_matrix,target_genes,phase_boundaries,plot_title='',save_name=''):
+def plot_phase_exp_raincloud(exp_matrix,target_genes,phase_boundaries,plot_title='',save_name='',scale=False,log10=False):
     """
     Function which plots a rainfall plot split into three cell cycle phases. The function
     takes in the primary expression matrix, a list of gene subsets (to filter the matrix),
@@ -1977,6 +1977,11 @@ def plot_phase_exp_raincloud(exp_matrix,target_genes,phase_boundaries,plot_title
         Title shown on the plot. The default is ''.
     save_path : string, optional
         path to a save location. The default is ''.
+    scale : boolean, optional
+        boolean indicating if data should be scaled (following log transformation
+        if applicable).
+    log10 : boolean, optional
+        boolean indicating if data should be log10 transformed
 
     Returns
     -------
@@ -1997,9 +2002,13 @@ def plot_phase_exp_raincloud(exp_matrix,target_genes,phase_boundaries,plot_title
         
         sub_matrix=exp_matrix[target_genes]
         sub_matrix=sub_matrix.iloc[start:end]
-        sub_dta=sub_matrix.mean(axis=0)
-        sub_dta= my_utils.log10_dta(sub_dta,None)
-        
+        sub_matrix=sub_matrix.mean(axis=0)
+        if log10==True:
+            sub_dta= my_utils.log10_dta(sub_matrix,None)
+        else:
+            sub_dta=sub_matrix.to_numpy()
+        if scale==True:
+            sub_dta=sub_dta/sub_dta.sum(axis=0, keepdims=True)
         data_to_plot.append(sub_dta)
 
     #Set the style/background of the plot
