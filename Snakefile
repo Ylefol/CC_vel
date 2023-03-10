@@ -97,19 +97,4 @@ rule t_test_delay:
     shell:
         "python {params.script} 2> {log} {input} {params.num_iters} {output.ranked_genes} {output.delay_genes} {output.t_test_res}"
 
-
-
-#Min max threshold must be split by a '_', can include none for the max
-#Takes in smallRNA sequencing count files and prepares them to be used in miRNA analysis
-rule miRNA_prep:
-    input:
-        "data_files/miRNA_files/non_categorized/{cell_line}_miRNA.csv"
-    params:
-        script="snake_scripts/snake_miRNA_prep.py"
-    output:
-        "data_files/miRNA_files/categorized/{cell_line}_miRNA_{min_max_threshold}.csv"
-    log:
-        "logs/miRNA_logs/{cell_line}_{min_max_threshold}.log"
-    shell:
-        "python {params.script} 2> {log} {input} {output}"
         
