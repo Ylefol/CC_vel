@@ -75,12 +75,8 @@ This rule calculates several results that may be used in custom analyses. It sta
 
 `snakemake data_files/data_results/rank/HaCat/A_B_ranked_genes.csv --cores 1`
 
-### Rule #6
-Rule #6 is not part of the standard pipeline, but is instead part of a microRNA analysis. This rule takes in smallRNAseq data along with targetscan data. It then creates csv files of microRNAs which fit within a specified threshold ex: 0_100 or 1000_None). These files contain the microRNAs which fit within the threshold and that have been categorized.
-
 
 ## Tutorial - analysis
-Using the results from the above rules, we can create non-default results using either of the three analysis script or the miRNA analysis script (if miRNA results are desired).
 The analysis scripts show how to retrieve the data that was generated and show some basic plots that have already been designed.
 These scripts were meant as a template for users, where they can familiarize themselves with the plots and then perform their own analyses with the generated results. These scripts vary from single cell_line analysis to cross cell-line analysis.
 

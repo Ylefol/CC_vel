@@ -1,6 +1,6 @@
 #Dependencies
 
-setwd("~/A_Projects/BiGR/BiGR_vel")
+setwd("~/A_Projects/BiGR/CC_vel")
 
 library("reshape2")
 library("ggplot2")
@@ -10,6 +10,8 @@ library("gprofiler2")
 library("ggrepel")
 library("stringr")
 library("ReactomeContentService4R")
+
+source('R_scripts/CC_vel_R_functions.R')
 
 #Get members of REAC of interest
 # REAC_1<-event2Ids(event.id = "R-HSA-2500257")$geneSymbol#Resolution of Sister Chromatid Cohesion
@@ -22,75 +24,12 @@ library("ReactomeContentService4R")
 # write.table(REAC_4,'Selenocysteine_synthesis.txt',row.names = F,quote = F, col.names =F)
 
 
-
-runProfiler<- function(Genelist, Group.No, max_p_value=0.05){
-  GO.df <- gprofiler(Genelist, organism="hsapiens", significant=FALSE, max_p_value=max_p_value, correction_method="fdr", domain_size="annotated", src_filter = c("GO", "KEGG", "REAC"))
-  if (nrow(GO.df) <= 0) return(NULL)
-  Fisher.df <- data.frame(O.S = GO.df$overlap.size, Q.O = (GO.df$query.size - GO.df$overlap.size), Q.T = (GO.df$term.size - GO.df$overlap.size),
-                          U = (25000 - GO.df$query.size - GO.df$term.size + GO.df$overlap.size))
-  GO.df$OR <- apply(Fisher.df, 1, function(x) fisher.test(matrix(x, nr=2))$estimate)
-  GO.df$Group <- rep(Group.No, times = length(GO.df$domain))
-  return(GO.df)
-}
-
-runProfiler2<- function(Genelist, Group.No, max_p_value=0.05){
-  GO.df <- gost(Genelist, organism="hsapiens", significant=TRUE, user_threshold=max_p_value, correction_method="fdr", domain_scope="annotated", sources = c("GO", "KEGG", "REAC"))
-  GO.df <- GO.df$result
-  if (nrow(GO.df) <= 0) return(NULL)
-  Fisher.df <- data.frame(O.S = GO.df$intersection_size, Q.O = (GO.df$query_size - GO.df$intersection_size), Q.T = (GO.df$term_size - GO.df$intersection_size),
-                          U = (25000 - GO.df$query_size - GO.df$term_size + GO.df$intersection_size))
-  GO.df$OR <- apply(Fisher.df, 1, function(x) fisher.test(matrix(x, nr=2))$estimate)
-  GO.df$Group <- Group.No
-  return(GO.df)
-}
-
 cellcycle.rea <- getParticipants("R-HSA-1640170", retrieval = "EventsInPathways")
 cellcycle.ids <- c("R-HSA-1640170", cellcycle.rea$stId)
 
 HaCaT <- na.omit(read.table("data_files/data_results/rank/HaCat/A_B_t_test_results.csv", header=T, sep=","))
-
-#spliced_up_CI_phase  => "Upper confidence interval is below 0 -> negative velocity"
-
-GetTopTerms <- function(tab, top=10) {return(tab[order(tab$p_value, 1 / tab$OR), ][1:top,"term_name"])}
-
-GetCCTerms <- function(tab) {return(tab[grep("(G0|G1[/ ]|G2|G0 and Early G1|(S|M|G1) Phase|[Mm]itotic .*[Pp]hase|[Cc]ell [Cc]ycle)", tab$term_name),"term_name"])}
-
-GetCCReactome <- function(tab) {return(tab[sub("REAC:", "", tab$term_id) %in% cellcycle.ids,"term_name"])}
-
-MeltProfiler1 <- function(list) {
-  vars <-  c("p_value", "term_name", "OR")
-  melt(lapply(list, function(x) x[, vars]), id.vars=vars)
-}
-
-MeltProfiler2 <- function(list) {
-  vars <-  c("p_value", "term_name", "OR")
-  melt(lapply(list, function(x) lapply(x, function(y) y[, vars])), id.vars=vars)
-}
-
-PlotTerms <- function(list, terms, melter=MeltProfiler1, phases=c("G1", "S", "G2M")) {
-  pd <- melter(list)
-  pd <- pd[pd$term_name %in% terms,]
-  pd$logP <- -log10(pd$p_value)
-  if ("L2" %in% colnames(pd)) {
-     pd$tmp <- pd$L1
-     pd$L1 <- as.character(pd$L2)
-     pd$L2 <- as.character(pd$tmp)
-     pd$L2 <- factor(pd$L2, levels=names(list), ordered=T)
-  }
-  pd$L1 <- factor(pd$L1, levels=phases, ordered=T)
-  pd <- pd[order(pd$L1, pd$p_value),]
-  
-  pd$term_name <- str_wrap(pd$term_name, width=100)
-  pd$term_name <- factor(pd$term_name, levels=rev(unique(pd$term_name)), ordered=TRUE)
-
-  p <- ggplot(pd, aes(L1, term_name)) + geom_point(aes(color=logP, size=OR)) + theme_bw() + scale_colour_gradient(low=("blue"), high=("red")) +
-    labs(x="Phase", y="Reactome pathway", color=expression(paste(-log[10], " FDR")), size="OR") +
-    theme(text = element_text(size = 15))
-  if ("L2" %in% colnames(pd)) {
-     p <- p + facet_grid(.~L2) 
-  }
-  return(p)
-}
+# HaCaT <- na.omit(read.table("analysis_results/thresh_0001/HaCat_0001_thresh.csv", header=T, sep=","))
+HaCaT<-HaCaT[HaCaT$padjusted<0.01,]
 
   
 phases <- c("G1", "S", "G2M")
@@ -104,8 +43,8 @@ cc.top <- unique(na.omit(unlist(lapply(lapply(go.results.peaks.rea[phases], func
 ggsave("HaCat_reactome_CC_peak_exp.pdf", PlotTerms(go.results.peaks.rea[phases], cc.top), width=7.5, height=5)
 
 
-top <- unique(unlist(lapply(go.results.peaks.rea, GetTopTerms, 5)))
-ggsave("HaCat_reactome_peak_exp.pdf", PlotTerms(go.results.peaks.rea[phases], top), width=7.5, height=9)
+top <- unique(unlist(lapply(go.results.peaks.rea, GetTopTerms, 10)))
+ggsave("HaCat_reactome_peak_exp.pdf", PlotTerms(go.results.peaks.rea[phases], top), width=10, height=9)
 
 
 #HaCaT Dynamic phases
@@ -126,7 +65,15 @@ ggsave("HaCat-DynPhases_reactome_CC.pdf", PlotTerms(go.results.dynphase.rea_HaCa
 
 #Compare cell lines with peak expression
 c293T <- na.omit(read.table("data_files/data_results/rank/293t/A_B_C_D_t_test_results.csv", header=T, sep=","))
+# c293T <- na.omit(read.table("analysis_results/thresh_0001/293t_0001_thresh.csv", header=T, sep=","))
+
+c293T<-c293T[c293T$padjusted<0.01,]
+
 Jurkat <- na.omit(read.table("data_files/data_results/rank/jurkat/A_B_C_D_t_test_results.csv", header=T, sep=","))
+# Jurkat <- na.omit(read.table("analysis_results/thresh_0001/jurkat_0001_thresh.csv", header=T, sep=","))
+
+Jurkat<-Jurkat[Jurkat$padjusted<0.01,]
+
 go.results.comb <-
   lapply(list(HaCaT=HaCaT, "293T"=c293T, Jurkat=Jurkat),
          function(cell) sapply(unique(na.omit(cell$phase_peak_exp)), function(x) runProfiler2(as.character(cell$gene_name[cell$phase_peak_exp %in% x]), x, 0.05), simplify=F))
@@ -138,4 +85,7 @@ cc.top2 <- unique(na.omit(unlist(lapply(go.results.comb.rea, function(list) lapp
 ggsave("All_reactome_CC_peak_exp.pdf", PlotTerms(go.results.comb.rea, na.omit(cc.top2), MeltProfiler2), width=10, height=6)
 
 top2 <- unique(unlist(lapply(go.results.comb.rea, function(x) lapply(x, GetTopTerms, 10))))
-ggsave("All_reactome_peak_exp.pdf", PlotTerms(go.results.comb.rea, na.omit(top2), MeltProfiler2), width=10, height=10)
+ggsave("All_reactome_peak_exp_10.pdf", PlotTerms(go.results.comb.rea, na.omit(top2), MeltProfiler2), width=14, height=15)
+
+top2 <- unique(unlist(lapply(go.results.comb.rea, function(x) lapply(x, GetTopTerms, 5))))
+ggsave("All_reactome_peak_exp_5.pdf", PlotTerms(go.results.comb.rea, na.omit(top2), MeltProfiler2), width=12, height=12)

@@ -67,53 +67,70 @@ for loop_number in range(int(sys.argv[2])):
     vlm.knn_imputation(n_pca_dims=20,k=k, balanced=True,
                         b_sight=np.minimum(k*8, vlm.S.shape[1]-1),
                         b_maxl=np.minimum(k*4, vlm.S.shape[1]-1))
-    vlm.normalize_median()
-    vlm.fit_gammas(maxmin_perc=[2,95], limit_gamma=True)
+    # vlm.normalize_median()
+    # vlm.fit_gammas(maxmin_perc=[2,95], limit_gamma=True)
     
-    vlm.normalize(which="imputed", size=False, log=True)
-    
-    
-    vlm.Pcs = np.array(vlm.pcs[:,:2], order="C")
-    
-    vlm.predict_U()
-    vlm.calculate_velocity()
-    vlm.calculate_shift()
-    vlm.extrapolate_cell_at_t(delta_t=1)
-    
-    #Use correlation to estimate transition probabilities for every cells to its embedding neighborhood
-    #hidim --> high dimensional space
-    #embed --> Name of the attribute containing the embedding, here it is PCs, but it could be  ts
-    #Transform --> Transformation that is applied on the hidim. Can be sqrt or log
-    #psc --> pseudocount added in variance normalizing transform
-    vlm.estimate_transition_prob(hidim="Sx_sz", embed="Pcs", transform="log", psc=1,
-                                  n_neighbors=150, knn_random=True, sampled_fraction=1)
+    # vlm.normalize(which="imputed", size=False, log=True)
     
     
-    #Use the transition probability to project the velocity direction on the embedding
-    #sigma_corr --> the kernel scalling
-    #expression scaling --> rescaled arrows to penalize arrows that explain very small amoung of expression differences
-    vlm.calculate_embedding_shift(sigma_corr = 0.05, expression_scaling=False)
-    #Expression scaling to False makes arrows larger and 'curvier' as no penalties implemented
+    # vlm.Pcs = np.array(vlm.pcs[:,:2], order="C")
+    
+    # vlm.predict_U()
+    # vlm.calculate_velocity()
+    # vlm.calculate_shift()
+    # vlm.extrapolate_cell_at_t(delta_t=1)
+    
+    # #Use correlation to estimate transition probabilities for every cells to its embedding neighborhood
+    # #hidim --> high dimensional space
+    # #embed --> Name of the attribute containing the embedding, here it is PCs, but it could be  ts
+    # #Transform --> Transformation that is applied on the hidim. Can be sqrt or log
+    # #psc --> pseudocount added in variance normalizing transform
+    # vlm.estimate_transition_prob(hidim="Sx_sz", embed="Pcs", transform="log", psc=1,
+    #                               n_neighbors=150, knn_random=True, sampled_fraction=1)
     
     
-    #Calculate the velocity using a point on a regular grid and a gaussian kernel
-    #steps --> number of steps in the grid for each axis
-    vlm.calculate_grid_arrows(smooth=0.5, steps=(25, 25), n_neighbors=150)
+    # #Use the transition probability to project the velocity direction on the embedding
+    # #sigma_corr --> the kernel scalling
+    # #expression scaling --> rescaled arrows to penalize arrows that explain very small amoung of expression differences
+    # vlm.calculate_embedding_shift(sigma_corr = 0.05, expression_scaling=False)
+    # #Expression scaling to False makes arrows larger and 'curvier' as no penalties implemented
+    
+    
+    # #Calculate the velocity using a point on a regular grid and a gaussian kernel
+    # #steps --> number of steps in the grid for each axis
+    # vlm.calculate_grid_arrows(smooth=0.5, steps=(25, 25), n_neighbors=150)
     
     window_val=int(0.20*len(vlm.ca['CellID']))
     
-    
-    spli_dict,unspli_dict=my_func.create_smooth_vels(vlm,window_size=window_val,return_dict=True)
+    #Smoothed velocity is made from the Sx parameter of the vlm object. This represents the smoothed expression
+    #of spliced based on the Knn smoothing.
+    spli_dict,unspli_dict,spli_mean_dict,unspli_mean_dict=my_func.create_smooth_vels(vlm,window_size=window_val,return_dict=True)
     
     # my_func.create_CI_CSVs(spli_dict, cell_line=cell_line_var, replicate=replicate, layer='spliced',file_name=str(loop_number+1))
     # my_func.create_CI_CSVs(unspli_dict, cell_line=cell_line_var, replicate=replicate, layer='unspliced',file_name=str(loop_number+1))
     
-    my_func.save_smooth_vels(vlm, spli_dict, cell_line=cell_line_var, replicate=replicate, layer='spliced',file_name=str(loop_number+1))
-    my_func.save_smooth_vels(vlm, unspli_dict, cell_line=cell_line_var, replicate=replicate, layer='unspliced',file_name=str(loop_number+1))
+    
+    my_func.save_iteration_data(vlm,spli_dict, cell_line=cell_line_var, replicate=replicate, layer='spliced',file_name=str(loop_number+1), save_choice='vel')
+    my_func.save_iteration_data(vlm,unspli_dict, cell_line=cell_line_var, replicate=replicate, layer='unspliced',file_name=str(loop_number+1), save_choice='vel')
+
+    
+    # my_func.save_smooth_vels(vlm, spli_dict, cell_line=cell_line_var, replicate=replicate, layer='spliced',file_name=str(loop_number+1))
+    # my_func.save_smooth_vels(vlm, unspli_dict, cell_line=cell_line_var, replicate=replicate, layer='unspliced',file_name=str(loop_number+1))
     
     
-    my_func.save_vlm_values(vlm,cell_line=cell_line_var, replicate=replicate, layer='spliced',file_name=str(loop_number+1))
-    my_func.save_vlm_values(vlm,cell_line=cell_line_var, replicate=replicate, layer='unspliced',file_name=str(loop_number+1))
+    my_func.save_iteration_data(vlm,spli_mean_dict, cell_line=cell_line_var, replicate=replicate, layer='spliced',file_name=str(loop_number+1), save_choice='exp_mean')
+    my_func.save_iteration_data(vlm,unspli_mean_dict, cell_line=cell_line_var, replicate=replicate, layer='unspliced',file_name=str(loop_number+1), save_choice='exp_mean')
+    
+    
+    # my_func.save_smooth_vels(vlm, spli_mean_dict, cell_line=cell_line_var, replicate=replicate, layer='spliced',file_name=str(loop_number+1),iteration_name='exp_mean_iters')
+    # my_func.save_smooth_vels(vlm, unspli_mean_dict, cell_line=cell_line_var, replicate=replicate, layer='unspliced',file_name=str(loop_number+1),iteration_name='exp_mean_iters')
+    
+    
+    # my_func.save_vlm_values(vlm,cell_line=cell_line_var, replicate=replicate, layer='spliced',file_name=str(loop_number+1))
+    # my_func.save_vlm_values(vlm,cell_line=cell_line_var, replicate=replicate, layer='unspliced',file_name=str(loop_number+1))
+    
+    my_func.save_iteration_data(vlm,None, cell_line=cell_line_var, replicate=replicate, layer='spliced',file_name=str(loop_number+1), save_choice='exp')
+    my_func.save_iteration_data(vlm,None, cell_line=cell_line_var, replicate=replicate, layer='unspliced',file_name=str(loop_number+1), save_choice='exp')
     
     
 

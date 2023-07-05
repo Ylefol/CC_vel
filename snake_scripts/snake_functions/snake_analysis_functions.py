@@ -11,7 +11,7 @@ import numpy as np
 import pyranges as pr
 import scipy.stats as stats
 
-from statistics import stdev
+import statistics
 from math import sqrt
 
 import itertools
@@ -33,6 +33,7 @@ import seaborn as sns
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
+from matplotlib.patches import ConnectionPatch
 
 #%% Processing and sorting
 
@@ -488,8 +489,10 @@ def create_REAC_dict(exp_values,significant_genes,orientation='G1'):
             first_gene=True
             for gene in gene_list[0]:
                 if gene in exp_values['spliced'] and gene in significant_genes:
-                    my_x_axis=np.arange(0,len(exp_values['spliced'][gene]))
-                    spli_mean_array,unspli_mean_array=smooth_layer_no_vlm(x_axis=my_x_axis,bin_size=100,window_size=200,spliced_array=exp_values['spliced'][gene],unspliced_array=exp_values['unspliced'][gene],orientation=orientation)
+                    # my_x_axis=np.arange(0,len(exp_values['spliced'][gene]))
+                    # spli_mean_array,unspli_mean_array=smooth_layer_no_vlm(x_axis=my_x_axis,bin_size=100,window_size=200,spliced_array=exp_values['spliced'][gene],unspliced_array=exp_values['unspliced'][gene],orientation=orientation)
+                    spli_mean_array=exp_values['spliced'][gene]
+                    unspli_mean_array=exp_values['unspliced'][gene]
                     if first_gene == True:
                         spli_tot_array=spli_mean_array
                         unspli_tot_array=unspli_mean_array
@@ -534,9 +537,10 @@ def calculate_peak_dict(exp_values,significant_genes,boundary_dict,layer_to_use=
     """
     exp_peak_dict={}
     for gene in significant_genes:
-        x_for_param=np.arange(0,len(exp_values['spliced'][gene]))
-        spli_mean_array,unspli_mean_array=smooth_layer_no_vlm(x_axis=x_for_param,bin_size=100,window_size=200,spliced_array=exp_values['spliced'][gene],unspliced_array=exp_values['unspliced'][gene],orientation=orientation)
-        
+        # x_for_param=np.arange(0,len(exp_values['spliced'][gene]))
+        # spli_mean_array,unspli_mean_array=smooth_layer_no_vlm(x_axis=x_for_param,bin_size=100,window_size=200,spliced_array=exp_values['spliced'][gene],unspliced_array=exp_values['unspliced'][gene],orientation=orientation)
+        spli_mean_array=exp_values['spliced']
+        unspli_mean_array=exp_values['unspliced']
         if layer_to_use=='spliced':
             arr_interest=spli_mean_array
         elif layer_to_use=='unspliced':
@@ -556,6 +560,168 @@ def calculate_peak_dict(exp_values,significant_genes,boundary_dict,layer_to_use=
     final_df[['gene_name']]=final_df.index
     final_df=final_df[['gene_name','peak_expression','phase']]
     return final_df
+
+
+def create_cell_line_replicate_cc_df(cc_path,cell_line_dict):
+    """
+    Function which creates a pandas dataframe containing all known cell cycle genes
+    for the G1, S, and G2/M phases. It then extracts the spliced values for each of the
+    submitted cell line / replicates and adds those gene values to the dataframe.
+
+    Parameters
+    ----------
+    cc_path : string
+        location of the known cell cycle genes file.
+    cell_line_dict : dictionnary
+        dictionnary where key names are cell lines and values are lists of replicate names.
+
+    Returns
+    -------
+    A pandas dataframe containing cell cycle gene names, associated cell cycle phase,
+    and expression data (spliced) for the queried cell lines and replicates.
+
+    """
+    cc_df=pd.read_csv(cc_path)
+    cc_df=cc_df[['gene','phase']]
+    cc_df.columns=['Gene','phase']
+    cc_df=cc_df[cc_df.phase.isin(['S','G2/M','G1'])]
+    
+    new_cc_df=cc_df.copy()
+    for cell_line in list(cell_line_dict.keys()):
+        for replicate in cell_line_dict[cell_line]:
+            
+            #Load relevant data to cell line and replicate
+            import scanpy as sc
+            adata = sc.read_loom('data_files/phase_reassigned/CC_'+cell_line+'_'+replicate+'.loom',X_name="")
+            spli_df=adata.to_df(layer='spliced')
+                        
+            
+            col_name=cell_line+'_'+replicate
+            spli_df=spli_df.mean().to_frame()
+            spli_df['Gene']=list(spli_df.index)
+            spli_df.columns=[col_name,'Gene']
+            spli_df.index.name=''
+            
+            new_cc_df=pd.merge(new_cc_df,spli_df,how='outer')
+    return(new_cc_df)
+
+def create_cell_line_variance_dictionnary(cell_line_dict,target_layer='spliced'):
+    """
+    Function which calculates the variance for selected cell lines. The function takes in
+    a dictionary where the key is the name of the cell line and the value is the 
+    folder (merged replicates) to be used to calculate the variance
+
+    Parameters
+    ----------
+    cell_line_dict : dictionnary
+        Dictionnary containing cell line name (key) and folder to use (value).
+    target_layer : list, optional
+        list with the layers to use.. The default is ['spliced'].
+
+    Returns
+    -------
+    Dictionnary containing the variance values for the selected cell lines.
+
+    """
+    cell_line_var_dict={}
+    for cell_line in list(cell_line_dict.keys()):
+        folder_to_use=cell_line_dict[cell_line]
+        mean_dict,CI_dict,bool_dict,count_dict,boundary_dict=my_utils.get_CI_data (cell_line, [target_layer], folder_to_use)
+        # vlm_dict=my_utils.get_vlm_values(cell_line, target_layer,folder_to_use )
+        vlm_mean_dict=my_utils.get_vlm_values(cell_line, [target_layer],folder_to_use,get_mean=True)
+    
+        gene_matrix=np.log10(vlm_mean_dict[target_layer])
+        phase_gene_df = pd.DataFrame()
+        for phase in list(['G1','S','G2M']): #Setting custom order for better representation
+            #Identify start and end of boundary
+            start=boundary_dict[phase]
+            if phase=='G1':
+                end=boundary_dict['S']-1
+            elif phase=='S':
+                end=len(gene_matrix.index)
+            else:
+                end=boundary_dict['G1']-1
+                
+            #Check normal variance
+            sub_matrix=gene_matrix
+            sub_matrix=sub_matrix.iloc[start:end]
+            sub_matrix=sub_matrix.mean(axis=0)
+            sub_df=sub_matrix.to_frame(name=phase)
+            phase_gene_df[phase]=sub_df[phase]
+            # mean_lst_norm.append(sub_matrix.mean())
+            
+        # found_var_norm=statistics.variance(mean_lst_norm)
+        
+        phase_gene_df=phase_gene_df.var(axis=1)
+        phase_gene_df=phase_gene_df.to_frame(name=cell_line)
+    
+        cell_line_var_dict[cell_line]=phase_gene_df[cell_line]
+    return(cell_line_var_dict)
+
+
+def cell_line_var_REAC(vlm_mean_dict,boundary_dict):
+    """
+    Function which creates REACTOME plots using variance, both normal variance and 
+    log10 variance. The function is intended to aid in identifying the best form of
+    variance to use in order to filter for house keeping genes
+
+    Parameters
+    ----------
+    vlm_mean_dict : dictionnary
+        dictionnary containing the smoothed expression values for spliced data.
+
+    Returns
+    -------
+    None.
+
+    """
+    dta_res_list=[]
+    gene_matrix=vlm_mean_dict['spliced'] 
+    log10_matrix=np.log10(gene_matrix)
+    for file_name in os.listdir('data_files/REAC_pathways'):
+        gene_list=pd.read_csv('data_files/REAC_pathways/'+file_name,header=None)
+        set1 = set(list(gene_list[0]))
+        set2 = set(list(vlm_mean_dict['spliced'].keys()))
+        intersect = list(set1 & set2)
+    
+        save_name=file_name.split('_')[0]
+        plot_phase_exp_raincloud(gene_matrix,intersect,boundary_dict,file_name,'analysis_results/'+save_name+'.png',False,False)
+        plot_phase_exp_raincloud(gene_matrix,intersect,boundary_dict,file_name+'_log10','analysis_results/'+save_name+'_log10.png',False,True)
+        
+        #Perform variance test
+        mean_lst_norm=[]
+        mean_lst_log10=[]
+        
+        for phase in list(['G1','S','G2M']): #Setting custom order for better representation
+            #Identify start and end of boundary
+            start=boundary_dict[phase]
+            if phase=='G1':
+                end=boundary_dict['S']-1
+            elif phase=='S':
+                end=len(gene_matrix.index)
+            else:
+                end=boundary_dict['G1']-1
+                
+            #Check normal variance
+            sub_matrix=gene_matrix[intersect]
+            sub_matrix=sub_matrix.iloc[start:end]
+            sub_matrix=sub_matrix.mean(axis=0)
+            mean_lst_norm.append(sub_matrix.mean())
+        
+            #Check log10 variance
+            sub_matrix=log10_matrix[intersect]
+            sub_matrix=sub_matrix.iloc[start:end]
+            sub_matrix=sub_matrix.mean(axis=0)
+            mean_lst_log10.append(sub_matrix.mean())
+            
+            
+        found_var_log10=statistics.variance(mean_lst_log10)
+        found_var_norm=statistics.variance(mean_lst_norm)
+        dta_res_list.append([file_name,found_var_norm,found_var_log10])
+    
+    res_df=pd.DataFrame(dta_res_list,columns=['REAC_name','variance_norm_exp','variance_log10_exp'])
+    res_df.to_csv('analysis_results/threshold_identification.csv', index=False)
+    
 
 #%% Plotting calculations
 
@@ -690,7 +856,7 @@ def smooth_layer_no_vlm(x_axis,bin_size, window_size, spliced_array, unspliced_a
 
     return spli_mean_array,unspli_mean_array
 
-def plot_ax_lines_phase_portrait_no_vlm(x_axis,orientation,boundary_dict):
+def plot_ax_lines_phase_portrait_no_vlm(x_axis,orientation,boundary_dict,v_lines=True,y_axis_loc=0):
     """
     Function which plots axis lines and colored horizontal lines to illustrate
     the different cell cycle phases of the dataset
@@ -705,6 +871,10 @@ def plot_ax_lines_phase_portrait_no_vlm(x_axis,orientation,boundary_dict):
         Either G1 or G2M to indicate the orientation of the data in regards to the cell cycle.
     boundary_dict : dictionnary
         Dictionnary containing the cell cycle boundaries for each phase (G1, S, G2M).
+    v_lines : boolean
+        Indicates if the vertical black lines between cc phases should be plotted
+    y_axis_loc : int
+        The location on the y axis where the horizontal lines will be printed
 
     Returns
     -------
@@ -713,8 +883,9 @@ def plot_ax_lines_phase_portrait_no_vlm(x_axis,orientation,boundary_dict):
     """
     
     #Plot vertical ax lines to clearly split the plot into the three cell cycles
-    for key,order in boundary_dict.items():
-        plt.axvline(order[0],c='k',lw=2)
+    if v_lines==True:
+        for key,order in boundary_dict.items():
+            plt.axvline(order[0],c='k',lw=2)
     
     #Sorts based on the order
     phase_order=sorted(boundary_dict,key=lambda k: boundary_dict[k][0])
@@ -736,13 +907,13 @@ def plot_ax_lines_phase_portrait_no_vlm(x_axis,orientation,boundary_dict):
             else:
                 color_used=boundary_dict['G1'][1] 
         if inc==0:
-            plt.hlines(0,0,boundary_dict[p][0], colors=color_used, linestyles='solid',lw=6)
+            plt.hlines(y_axis_loc,0,boundary_dict[p][0], colors=color_used, linestyles='solid',lw=6)
         else:
-            plt.hlines(0,boundary_dict[phase_order[inc-1]][0],boundary_dict[p][0], colors=color_used, linestyles='solid',lw=6)
+            plt.hlines(y_axis_loc,boundary_dict[phase_order[inc-1]][0],boundary_dict[p][0], colors=color_used, linestyles='solid',lw=6)
         
         if inc==2 and boundary_dict[p][0]<np.max(x_axis):
             # if orientation == 'G1':
-            plt.hlines(0,boundary_dict[phase_order[inc]][0],np.max(x_axis), colors=boundary_dict[p][1], linestyles='solid',lw=6)
+            plt.hlines(y_axis_loc,boundary_dict[phase_order[inc]][0],np.max(x_axis), colors=boundary_dict[p][1], linestyles='solid',lw=6)
             # if orientation == 'G2M':
             #     plt.hlines(0,boundary_dict[phase_order[inc]][0],np.max(vlm.ca['new_order']), colors=boundary_dict[phase_order[0]][1], linestyles='solid',lw=8)
 
@@ -1003,8 +1174,59 @@ def plot_raincloud_delay(delay_df,cell_line,plot_name='',save_path='',save_name=
     spearman_and_plot_delays(delay_df,'inc_to_+1','dec_to_0',save_path=plot_path,save_name=save_name+'_active_transcription_correlation.png')
     spearman_and_plot_delays(delay_df,'inc_to_0','dec_to_-1',save_path=plot_path,save_name=save_name+'_no_transcription_correlation.png')
 
+
+def raincloud_delay_two_files_two_categories(delay_file_1,delay_file_2,cat_1,cat_2,save_name='custom_delay.png'):
+    """
+    Function which plots two categories of delays from two files. This is to better compare
+    two categories of two different origins. For example, delays representing active
+    transcription for all genes and for significant genes
+
+    Parameters
+    ----------
+    delay_file_1 : pandas dataframe
+        Contains delay data.
+    delay_file_2 : pandas dataframe
+        Contains delay data.
+    cat_1 : string
+        string for a category present in both delay files.
+    cat_2 : string
+        string for a category present in both delay files..
+    save_name : string, optional
+        save path and name of the plot. The default is 'custom_delay.png'.
+
+    Returns
+    -------
+    None.
+
+    """
+    #Log transform the data
+    dta1 = my_utils.log10_dta(delay_file_1,cat_1)
+    dta2 = my_utils.log10_dta(delay_file_1,cat_2)
+    dta3 = my_utils.log10_dta(delay_file_2,cat_1)
+    dta4 = my_utils.log10_dta(delay_file_2,cat_2)
+        
+    data_to_plot = [dta1, dta2, dta3, dta4]
     
-def plot_layer_plot(ax,df_dict,boundary_dict,gene_name,orientation):
+    #Set the style/background of the plot
+    sns.set(style="whitegrid",font_scale=2)
+    
+    #Create the plot
+    f, ax = plt.subplots(figsize=(15, 5))
+    ax=pt.RainCloud(data = data_to_plot, palette = ['#e89674','#95a3c3','#e89674','#95a3c3'], bw = 0.3, width_viol = .6, ax = ax, orient = 'v',offset=0.12)
+    # set style for the axes
+    labels = ['', '', '', '']
+    for ax in [ax]:
+        ax.xaxis.set_tick_params(direction='out')
+        ax.xaxis.set_ticks_position('bottom')
+        ax.set_xticklabels(labels)
+    
+    plot_name='left - '+str(len(dta1))+' genes | right - '+str(len(dta3))+' genes'
+    plt.title(plot_name)
+    plt.ylabel('log10(cell delay)')
+    #Save the plot
+    plt.savefig(os.path.join(save_name),bbox_inches='tight')
+    
+def plot_layer_plot(ax,df_dict,df_dict_mean,boundary_dict,gene_name,orientation,return_spli_ax=False):
     """
     Function which plots what has been called the 'layer plot'. This plot shows 
     all the spliced and unspliced value of each cell for a specific gene. Spliced 
@@ -1020,6 +1242,8 @@ def plot_layer_plot(ax,df_dict,boundary_dict,gene_name,orientation):
         coorinates within a grid for plotting.
     df_dict : dictionnary
         dictionnary containing the spliced and unspliced values for the targeted gene.
+    df_dict_mean : dictionnary
+        dictionnary containing the mean spliced and unspliced values for the targeted gene.
     boundary_dict : dictionnary
         dictionnary contianing the cell boundaries for the cell cycle.
     gene_name : string
@@ -1027,6 +1251,9 @@ def plot_layer_plot(ax,df_dict,boundary_dict,gene_name,orientation):
     orientation : string
         Either G1 or G2M to indicate the orientation of the dataset in regards
         to the cell cycle.
+    return_spli_ax : boolean, optional
+        Boolean indicating if the spliced boolean should be returned. May be usefull
+        for plotting purposes
 
     Returns
     -------
@@ -1050,7 +1277,8 @@ def plot_layer_plot(ax,df_dict,boundary_dict,gene_name,orientation):
     my_x_axis=np.arange(0,len(df_dict['spliced'][gene_name]))
     
     #Plots the unspliced cells on the left hand y axis
-    #Customizes the fi
+    #Customizes the figure
+    
     ax.scatter(my_x_axis, df_dict['unspliced'][gene_name], alpha=0.7, c="#b35806", s=5, label="unspliced",marker='.')
     ax.set_ylim(0, np.max(df_dict['unspliced'][gene_name])*1.02)
     minimal_yticks(0, np.max(df_dict['unspliced'][gene_name])*1.02)
@@ -1074,7 +1302,11 @@ def plot_layer_plot(ax,df_dict,boundary_dict,gene_name,orientation):
     ax.tick_params(axis='x')#,labelsize=15)
     
     #Calculate the spliced and unspliced mean curved (smoothed) values
-    spli_mean_array,unspli_mean_array=smooth_layer_no_vlm(x_axis=my_x_axis,bin_size=100,window_size=200,spliced_array=df_dict['spliced'][gene_name],unspliced_array=df_dict['unspliced'][gene_name],orientation='G1')
+    # spli_mean_array,unspli_mean_array=smooth_layer_no_vlm(x_axis=my_x_axis,bin_size=100,window_size=200,spliced_array=df_dict['spliced'][gene_name],unspliced_array=df_dict['unspliced'][gene_name],orientation='G1')
+    
+    spli_mean_array=df_dict_mean['spliced'][gene_name]
+    unspli_mean_array=df_dict_mean['unspliced'][gene_name]
+    
     bin_order_axis=np.arange(start=0,stop=len(my_x_axis))
     
     #Plot the spliced and unspliced mean curves on their respective axes
@@ -1088,7 +1320,9 @@ def plot_layer_plot(ax,df_dict,boundary_dict,gene_name,orientation):
     if orientation == 'G2M':
         plt.gca().invert_xaxis()
         ax.set_xlabel("order (reversed)",labelpad=-10)#,fontsize=20)
-
+    
+    if return_spli_ax==True:
+        return(ax_2)
 
 def plot_vels_and_CIs(main_dict,subplot_coordinates,plot_title,boundary_dict,single_rep=False):
     """
@@ -1207,7 +1441,7 @@ def plot_vels_and_CIs(main_dict,subplot_coordinates,plot_title,boundary_dict,sin
     # plt.title(plot_title)
 
 
-def plot_layer_smooth_vel(gene_name, mean_dict, bool_dict, CI_dict, counts_dict,vlm_dict,boundary_dict,cell_line,save_path='',single_rep=False):
+def plot_layer_smooth_vel(gene_name, mean_dict, bool_dict, CI_dict, counts_dict,vlm_dict,vlm_mean_dict,boundary_dict,cell_line,save_path='',single_rep=False):
     """
     A wrapper function which creates a two plot figure:
     It plots the layer plot on the lef thand side and the curve/velocity plot
@@ -1232,6 +1466,8 @@ def plot_layer_smooth_vel(gene_name, mean_dict, bool_dict, CI_dict, counts_dict,
         Dictionnary containing the count values (either +1,-1, or 0) for the velocity.
     vlm_dict : dictionnary
         Dictionnary containing the spliced and unpsliced values (non-velocity).
+    vlm_mean_dict : dictionnary
+        Dictionnary containing the spliced and unpsliced values (non-velocity) means.
     boundary_dict : dictionnary
         Dictionnary indicating the cell cycle boundaries in terms of cell number for each phase..
     cell_line : string
@@ -1258,7 +1494,7 @@ def plot_layer_smooth_vel(gene_name, mean_dict, bool_dict, CI_dict, counts_dict,
     
     #Plot the layer plot on the left hand side
     ax = plt.subplot(gs[0]) 
-    plot_layer_plot(ax,vlm_dict,boundary_dict,gene_name,orientation)
+    plot_layer_plot(ax,vlm_dict,vlm_mean_dict,boundary_dict,gene_name,orientation)
     
     #Plot the velocity curve plot on the right hand side
     ax = plt.subplot(gs[1])
@@ -1280,7 +1516,7 @@ def plot_layer_smooth_vel(gene_name, mean_dict, bool_dict, CI_dict, counts_dict,
     colors_dict = {'G1':np.array([52, 127, 184]),'S':np.array([37,139,72]),'G2M':np.array([223,127,49]),}
     colors_dict = {k:v/256 for k, v in colors_dict.items()}
     
-    G2M_bar=Line2D([0], [0],color=colors_dict['G2M'], linewidth=4, linestyle='solid',label='G2M cells')
+    G2M_bar=Line2D([0], [0],color=colors_dict['G2M'], linewidth=4, linestyle='solid',label='G2/M cells')
     G1_bar=Line2D([0], [0],color=colors_dict['G1'], linewidth=4, linestyle='solid',label='G1 cells')
     S_bar=Line2D([0], [0],color=colors_dict['S'], linewidth=4, linestyle='solid',label='S cells')
     
@@ -1450,7 +1686,7 @@ def plot_curve_count(gene_name, mean_dict, bool_dict, CI_dict, counts_dict,bound
     colors_dict = {'G1':np.array([52, 127, 184]),'S':np.array([37,139,72]),'G2M':np.array([223,127,49]),}
     colors_dict = {k:v/256 for k, v in colors_dict.items()}
     
-    G2M_bar=Line2D([0], [0],color=colors_dict['G2M'], linewidth=4, linestyle='solid',label='G2M cells')
+    G2M_bar=Line2D([0], [0],color=colors_dict['G2M'], linewidth=4, linestyle='solid',label='G2/M cells')
     G1_bar=Line2D([0], [0],color=colors_dict['G1'], linewidth=4, linestyle='solid',label='G1 cells')
     S_bar=Line2D([0], [0],color=colors_dict['S'], linewidth=4, linestyle='solid',label='S cells')
     
@@ -1539,8 +1775,7 @@ def create_REAC_summary_plots(value_dict,boundary_dict,layer='spliced',second_la
         
         #Remove underscore from names
         REAC_name=str.replace(REAC, '_', ' ')
-        
-        my_y=value_dict[REAC][layer]
+        my_y=np.atleast_2d(value_dict[REAC][layer])
         my_y=my_y/my_y.sum(axis=1, keepdims=True)
         mean_line=np.mean(my_y,axis=0)
         my_x_axis=np.arange(0,len(mean_line))
@@ -1551,7 +1786,7 @@ def create_REAC_summary_plots(value_dict,boundary_dict,layer='spliced',second_la
         ax.plot(my_x_axis, mean_line, c=col_dict[layer][1],linewidth=3)
         
         if second_layer != None:
-            second_val=value_dict[REAC][second_layer]
+            second_val=np.atleast_2d(value_dict[REAC][second_layer])
             second_val=second_val/second_val.sum(axis=1, keepdims=True)
             second_mean=np.mean(second_val,axis=0)
             second_mean=second_mean-np.max(second_val)*1.05
@@ -1652,7 +1887,7 @@ def plot_phase_exp_raincloud(exp_matrix,target_genes,phase_boundaries,plot_title
     f, ax = plt.subplots(figsize=(15, 5))
     ax=pt.RainCloud(data = data_to_plot, palette = 'Set2', bw = 0.3, width_viol = .6, ax = ax, orient = 'v',offset=0.12)
     # set style for the axes
-    labels = ['G1', 'S', 'G2M']
+    labels = ['G1', 'S', 'G2/M']
     for ax in [ax]:
         ax.xaxis.set_tick_params(direction='out')
         ax.xaxis.set_ticks_position('bottom')
@@ -1669,6 +1904,352 @@ def plot_phase_exp_raincloud(exp_matrix,target_genes,phase_boundaries,plot_title
 
     #Resets the 'theme' for the plots as to not interfere with downstream plots
     mpl.rc_file_defaults()
+
+
+def raincloud_for_cc_genes(main_df,target_phase):
+    """
+    Function which plots raincloud plots. This function expects a very specific file
+    generated by the 'create_cell_line_replicate_cc_df' function. The target phase 
+    is specified and this function will plot a raincloud plot of all cell line and 
+    replicates for the genes associated to the specified function. 
+    The function will save the plot to the main directory.
+
+    Parameters
+    ----------
+    main_df : pandas dataframe
+        pandas dataframe containing gene names, associated cell cycle phase, and spliced
+        expression results for each cell line + replicate to be plotted.
+    target_phase : string
+        Either G1, S, or G2/M.
+
+    Returns
+    -------
+    None.
+
+    """
+    #Start by setting up the data, one df per phase
+    data_to_plot=[]
+    exp_matrix=main_df[main_df.phase==target_phase]
+    exp_matrix=exp_matrix.drop(columns=['Gene','phase'])
+    for col in exp_matrix.columns:
+        data_to_plot.append(exp_matrix[col].dropna())
+    
+    #Set the style/background of the plot
+    sns.set(style="whitegrid",font_scale=2)
+    # Create an array with the colors you want to use
+    colors = ['#a6cee3','#1f78b4','#b2df8a','#33a02c','#fb9a99','#e31a1c','#fdbf6f','#ff7f00','#cab2d6','#6a3d9a']
+    # Set your custom color palette
+    sns.set_palette(sns.color_palette(colors))
+    
+    #Create the plot
+    f, ax = plt.subplots(figsize=(12,6)  , dpi=100)
+    ax=pt.RainCloud(data = data_to_plot, palette = colors, ax = ax, orient = 'v',offset=0.12)
+    # set style for the axes
+    labels = list(exp_matrix.columns)
+    for ax in [ax]:
+        ax.xaxis.set_tick_params(direction='out')
+        ax.xaxis.set_ticks_position('bottom')
+        ax.set_xticklabels(labels)
+    plt.xticks(rotation=45)
+    plt.title('cell cycle genes associated to '+target_phase)
+    plt.ylabel('spliced expression values')
+    
+    if target_phase=='G2/M':
+        target_phase='G2M'
+    plt.savefig('raincloud_cc_genes_'+target_phase+'.png',bbox_inches='tight')
+    plt.clf()
+    plt.close("all")
+    # plt.show()
+    gc.collect()
+    
+    #Resets the 'theme' for the plots as to not interfere with downstream plots
+    mpl.rc_file_defaults()
+
+
+def plot_spliced_velocity_expression_zero_point(mean_dict,CI_dict,bool_dict,vlm_mean_dict,boundary_dict,gene_name,plot_name='',custom_alpha_zero_point=0.1):
+    """
+    Function which plots the spliced velocity as well as spliced expression data. The plot also illustrates the 
+    location of peak expression (up and down) as well as where velocity is uncertain (zero points).
+    
+    This plot also shows the order of the cells/data points based on their assigned cell cycle phase.
+    
+    Plot is then saved.
+
+    Parameters
+    ----------
+    mean_dict : dictionnary
+        Dictionnary containing the spliced velocity data.
+    CI_dict : dictionnary
+        Dictionnary containing the confidence interval data for spliced velocity.
+    bool_dict : dictionnary
+        Dictionnary containing booleans which indicate where the spliced velocity is uncertain.
+    vlm_mean_dict : dictionnary
+        Dictionnary containing the smoothed spliced and unspliced values for the expression data.
+    boundary_dict : dictionnary
+        Dictionnary containing the cell cycle phase boundaries.
+    gene_name : string
+        String of the gene name that is to be plotted.
+    plot_name : string, optional
+        plot path and name. The default is ''.
+    custom_alpha_zero_point : float, optional
+        The alpha value given to the zero point range. Depending on the x axis, various
+        different alphas may be beneficial due to line overlapping. The default is 0.1.
+
+    Returns
+    -------
+    None.
+
+    """
+    #Figure set up
+    plt.figure(None, (10.00,3.92), dpi=600)
+    gs = plt.GridSpec(1,2)
+    ax = plt.subplot(gs[0]) 
+    
+    #Create the dictionnary for the velocity curves (vel, CI, and boolean)
+    main_dict=subset_the_dicts_merged_CI(gene_name,mean_dict,bool_dict,CI_dict)
+    
+    #### create/plot velocity curve
+    #Plot the velocity curve and the confidence interval provided it is a merged replicate
+    #The lines plotted here have a fainter color
+    ax.plot(range(len(main_dict['spli_data'])),main_dict['spli_data'],c='#542788',zorder=3)
+    ax.plot(range(len(main_dict['spli_low_CI'])), main_dict['spli_low_CI'], c="k",linewidth=0.8,ls='-',zorder=3)
+    ax.plot(range(len(main_dict['spli_up_CI'])), main_dict['spli_up_CI'], c="k",linewidth=0.8,ls='--',zorder=3)
+
+    #### velocity y axis formatting
+    min_y_val=np.min(main_dict['spli_low_CI'])
+    max_y_val=np.max(main_dict['spli_up_CI'])
+    #Plots the horizontal zero line on the y axis of velocity
+    plt.hlines(0,0,len(main_dict['spli_data']),colors='black',linestyles='solid',lw=0.5)
+    #setup y axis for velocity - requires scientific notatoion
+    ax.yaxis.set_major_formatter(mtick.FormatStrFormatter('%.2e'))
+    p = np.min(main_dict['spli_data'])
+    P = np.max(main_dict['spli_data'])
+    plt.yticks([p,0,P], visible=True, rotation="vertical",va="center")
+    ax.set_ylabel("spliced velocity",labelpad=0,fontsize=15)
+    
+    #Calculate y axis spacing
+    y_axis_spacing=min_y_val-(min_y_val*1.05)
+    plt.ylim(min_y_val-y_axis_spacing, max_y_val+y_axis_spacing)
+    
+    plt.draw() #Need to draw to fetch the labels
+    #Get labels and overwrite scientific notation format for the 0
+    labels = [item.get_text() for item in ax.get_yticklabels()]
+    labels[1]=0
+    ax.set_yticklabels(labels)
+    
+    #### x axis set-up
+    my_x_axis=np.arange(0,len(main_dict['spli_data']))
+    plt.xlim(0,len(my_x_axis))
+    p = np.min(0)
+    P = np.max(len(my_x_axis))
+    ax.spines['top'].set_visible(False)
+    plt.xticks(np.linspace(p,P,5), [f"{p:.0f}", "","","", f"{P:.0f}"])
+    #Retrieve tick labels and make last tick of x axis aligned to the right
+    ticklabels = ax.get_xticklabels()
+    ticklabels[-1].set_ha("right")
+    
+    #Get spliced values
+    spli_array=vlm_mean_dict['spliced'][gene_name]
+
+    #### Plot expression on y axis
+    #Creates a separate y axis (ax_2)
+    ax_2 = ax.twinx()
+    
+    #Plot spliced data
+    ax_2.plot(my_x_axis, spli_array, c="#542788",linewidth=2,alpha=0.5)
+    #y axis formatting
+    min_y_val=np.min(spli_array)
+    max_y_val=np.max(spli_array)
+    y_axis_spacing=min_y_val-min_y_val*1.05
+    plt.ylim((min_y_val+y_axis_spacing), max_y_val*1.05)
+    #setup y axis for velocity - requires scientific notatoion
+    # ax.yaxis.set_major_formatter(mtick.FormatStrFormatter('%.2e'))
+    plt.yticks([min_y_val,max_y_val], visible=True, rotation="vertical",va="center")
+    ax_2.set_ylabel("spliced expression",labelpad=-10,fontsize=15)
+    
+    
+    #### Zero point ranges
+    for idx,val in enumerate(main_dict['gap_bool_spli']['start_false']):
+        start_range=val
+        end_range=main_dict['gap_bool_spli']['end_false'][idx]
+        for i in range(start_range,end_range):
+            con = ConnectionPatch(xyA=(i,vlm_mean_dict['spliced'][gene_name][i]), xyB=(i,0), coordsA="data", coordsB="data", axesA=ax_2, axesB=ax, color="red",alpha=custom_alpha_zero_point)
+            ax.add_artist(con)
+    
+    #### expression peaks (min and max)
+    location_max=np.where(vlm_mean_dict['spliced'][gene_name]==np.max(vlm_mean_dict['spliced'][gene_name]))[0][0]
+    con_max = ConnectionPatch(xyA=(location_max,vlm_mean_dict['spliced'][gene_name][location_max]), xyB=(location_max,0), coordsA="data", coordsB="data", axesA=ax_2, axesB=ax, color="darkred",alpha=1,lw=1)
+    ax.add_artist(con_max)
+    
+    location_min=np.where(vlm_mean_dict['spliced'][gene_name]==np.min(vlm_mean_dict['spliced'][gene_name]))[0][0]
+    con_min = ConnectionPatch(xyA=(location_min,vlm_mean_dict['spliced'][gene_name][location_min]), xyB=(location_min,0), coordsA="data", coordsB="data", axesA=ax_2, axesB=ax, color="darkred",alpha=1,lw=1)
+    ax.add_artist(con_min)
+    
+    
+    #### Plot cell cycle color guide
+    #Set up new dict
+    layer_boundaries=boundary_dict.copy()
+    #Set-up color codes
+    colors_dict = {'G1':np.array([52, 127, 184]),'S':np.array([37,139,72]),'G2M':np.array([223,127,49]),}
+    colors_dict = {k:v/256 for k, v in colors_dict.items()}
+    #Create/adjust new dict
+    layer_boundaries['S']=[layer_boundaries['S'],colors_dict['S']]
+    layer_boundaries['G2M']=[layer_boundaries['G2M'],colors_dict['G2M']]
+    layer_boundaries['G1']=[layer_boundaries['G1'],colors_dict['G1']]
+    #Identify orientation
+    if boundary_dict['G2M']==0:
+        orientation='G1'
+    else:
+        orientation='G2M'
+    #create the colored horizontal lines for cell cycle phase
+    plot_ax_lines_phase_portrait_no_vlm(my_x_axis,orientation,layer_boundaries,v_lines=False,y_axis_loc=(min_y_val+y_axis_spacing))
+    
+    
+    #### Create plot legend
+    from matplotlib.lines import Line2D
+    spli_leg=Line2D([0], [0],color='#542788', linewidth=2, linestyle='solid',label='spliced velocity')
+    unspli_leg=Line2D([0], [0],color='#542788', linewidth=2,alpha=0.5, linestyle='solid',label='spliced expression')   
+    lines_up=Line2D([0], [0],color='black', linewidth=1, linestyle='--',label='upper_CI')
+    lines_down=Line2D([0], [0],color='black', linewidth=1, linestyle='solid',label='lower_CI')
+    
+    G2M_bar=Line2D([0], [0],color=colors_dict['G2M'], linewidth=4, linestyle='solid',label='G2/M cells')
+    G1_bar=Line2D([0], [0],color=colors_dict['G1'], linewidth=4, linestyle='solid',label='G1 cells')
+    S_bar=Line2D([0], [0],color=colors_dict['S'], linewidth=4, linestyle='solid',label='S cells')
+    
+    exp_peaks=Line2D([0], [0],color='darkred', linewidth=2, linestyle='solid',label='expression peaks')
+    vel_zero_bar=Line2D([0], [0],color='red',alpha=0.5, linewidth=4, linestyle='solid',label='velocity 0 point')
+
+    #Add necessary legend elements to the legend
+    handles=[spli_leg,unspli_leg,G2M_bar,G1_bar,S_bar,lines_up,lines_down,exp_peaks,vel_zero_bar]
+    plt.legend(handles=handles, bbox_to_anchor=(1.10, 1), loc='upper left')
+    
+    
+    #Adjust the layout, save, and show
+    plt.title(gene_name)
+    plt.tight_layout()
+    if plot_name=='':
+        plot_name=gene_name+'.png'
+    plt.savefig(plot_name,bbox_inches='tight')
+    # plt.show()
+
+
+def plot_velocity_expression_zero_point(vel_dict,vel_CI_dict,bool_dict,vlm_dict,vlm_mean_dict,boundary_dict,gene_name,plot_name='',custom_alpha_zero_point=0.1):
+    """
+    Function which plots a the layer plot and velocity plot (with the first being above the second).
+    The function then adds a range (transparent red) showing where the spliced velocity is considered
+    to be zero. It also plots a single line in darkred showing the spliced expression peak on 
+    the smoothed data.
+    Both of these types of lines extend from one plot to the other as the intent is to show
+    the location of these two events in the other plot.
+    
+    The function saves the plot.
+
+    Parameters
+    ----------
+    vel_dict : dictionnary
+        Dictionnary containing the spliced velocity data.
+    vel_CI_dict : dictionnary
+        Dictionnary containing the confidence interval data for spliced velocity.
+    bool_dict : dictionnary
+        Dictionnary containing booleans which indicate where the spliced velocity is uncertain.
+    vlm_dict : dictionnary
+        Dictionnary containing the spliced and unspliced values for the expression data.
+    vlm_mean_dict : dictionnary
+        Dictionnary containing the smoothed spliced and unspliced values for the expression data.
+    boundary_dict : dictionnary
+        Dictionnary containing the cell cycle phase boundaries.
+    gene_name : string
+        String of the gene name that is to be plotted.
+    plot_name : string, optional
+        plot path and name. The default is ''.
+    custom_alpha_zero_point : float, optional
+        The alpha value given to the zero point range. Depending on the x axis, various
+        different alphas may be beneficial due to line overlapping. The default is 0.1.
+
+    Returns
+    -------
+    None.
+
+    """
+    #### Determine orientation
+    if boundary_dict['G2M']==0:
+        orientation='G1'
+    else:
+        orientation='G2M'
+    
+    #### Dimension set-up
+    plt.figure(None, (7.50,7.00), dpi=600)
+    gs = plt.GridSpec(2,1) #2 rows 1 column
+    
+    #### Layer plot (top location)
+    ax1 = plt.subplot(gs[0]) 
+    layer_spli_ax=plot_layer_plot(ax1,vlm_dict,vlm_mean_dict,boundary_dict,gene_name,orientation,return_spli_ax=True)
+    
+    #### velocity plot with additional y label
+    ax2 = plt.subplot(gs[1])
+    main_dict=subset_the_dicts_merged_CI(gene_name,vel_dict,bool_dict,vel_CI_dict)
+    plot_vels_and_CIs(main_dict,ax2,plot_title=gene_name,boundary_dict=boundary_dict,single_rep=False)
+    ax2.set_ylabel("velocity",labelpad=-10,fontsize=15)
+    
+    #### Zero point ranges
+    for idx,val in enumerate(main_dict['gap_bool_spli']['start_false']):
+        start_range=val
+        end_range=main_dict['gap_bool_spli']['end_false'][idx]
+        for i in range(start_range,end_range):
+            con = ConnectionPatch(xyA=(i,vlm_mean_dict['spliced'][gene_name][i]), xyB=(i,0), coordsA="data", coordsB="data", axesA=layer_spli_ax, axesB=ax2, color="red",alpha=custom_alpha_zero_point)
+            ax2.add_artist(con)
+    
+    #### expression peaks (min and max)
+    location_max=np.where(vlm_mean_dict['spliced'][gene_name]==np.max(vlm_mean_dict['spliced'][gene_name]))[0][0]
+    con_max = ConnectionPatch(xyA=(location_max,vlm_mean_dict['spliced'][gene_name][location_max]), xyB=(location_max,0), coordsA="data", coordsB="data", axesA=layer_spli_ax, axesB=ax2, color="darkred",alpha=1,lw=1)
+    ax2.add_artist(con_max)
+    
+    location_min=np.where(vlm_mean_dict['spliced'][gene_name]==np.min(vlm_mean_dict['spliced'][gene_name]))[0][0]
+    con_min = ConnectionPatch(xyA=(location_min,vlm_mean_dict['spliced'][gene_name][location_min]), xyB=(location_min,0), coordsA="data", coordsB="data", axesA=layer_spli_ax, axesB=ax2, color="darkred",alpha=1,lw=1)
+    ax2.add_artist(con_min)
+    
+    #### Create legend elements and add handles
+    from matplotlib.lines import Line2D
+    #Build the elements for the legend
+    handles,labels=ax2.get_legend_handles_labels()
+    spli_leg=Line2D([0], [0],color='#542788', linewidth=1, linestyle='solid',label='spliced')
+    unspli_leg=Line2D([0], [0],color='#b35806', linewidth=1, linestyle='solid',label='unspliced')   
+    lines_up=Line2D([0], [0],color='black', linewidth=0.5, linestyle='--',label='upper_CI')
+    lines_down=Line2D([0], [0],color='black', linewidth=0.5, linestyle='solid',label='lower_CI')
+    
+    exp_peaks=Line2D([0], [0],color='darkred', linewidth=2, linestyle='solid',label='expression peaks')
+    vel_zero_bar=Line2D([0], [0],color='red',alpha=0.5, linewidth=4, linestyle='solid',label='velocity 0 point')
+    
+    #Create the legend elements for the phase boundaries
+    colors_dict = {'G1':np.array([52, 127, 184]),'S':np.array([37,139,72]),'G2M':np.array([223,127,49]),}
+    colors_dict = {k:v/256 for k, v in colors_dict.items()}
+    
+    G2M_bar=Line2D([0], [0],color=colors_dict['G2M'], linewidth=4, linestyle='solid',label='G2/M cells')
+    G1_bar=Line2D([0], [0],color=colors_dict['G1'], linewidth=4, linestyle='solid',label='G1 cells')
+    S_bar=Line2D([0], [0],color=colors_dict['S'], linewidth=4, linestyle='solid',label='S cells')
+    
+    #Add necessary legend elements to the legend
+    handles.append(spli_leg) 
+    handles.append(unspli_leg) 
+    handles.append(G2M_bar) 
+    handles.append(G1_bar) 
+    handles.append(S_bar)    
+    handles.append(lines_up) 
+    handles.append(lines_down) 
+    handles.append(exp_peaks) 
+    handles.append(vel_zero_bar) 
+    
+    #### plot legend and title, correct layout, save plot
+    plt.legend(handles=handles, bbox_to_anchor=(1.05, 1))
+    plt.tight_layout()
+    #Use gene name as plot title
+    plt.suptitle(gene_name,ha='center',fontsize=20)
+    
+    if plot_name=='':
+        plot_name=gene_name+'.png'
+    plt.savefig(plot_name,bbox_inches='tight')
+
+
 
 
 #%% Wrapper functions for analysis
@@ -1703,16 +2284,19 @@ def wrapper_plot_single_rep_genes(cell_line,replicates,target_rep,gene_list,save
     """
     layers=['spliced','unspliced']
     mean_dict,CI_dict,bool_dict,count_dict,boundary_dict=my_utils.get_CI_data (cell_line, layers, target_rep)
-    df_dict_indiv=my_utils.get_vlm_values(cell_line, layers,target_rep)
-    indiv_dict={}
+    df_dict_exp=my_utils.get_vlm_values(cell_line, layers,target_rep)
+    df_dict_exp_mean=my_utils.get_vlm_values(cell_line, layers,target_rep,get_mean=True)
+    exp_dict={}
+    exp_mean_dict={}
     for layer in layers:
-        indiv_dict[layer]=df_dict_indiv[layer]  
+        exp_dict[layer]=df_dict_exp[layer]  
+        exp_mean_dict[layer]=df_dict_exp_mean[layer]  
     
     if save_path=='':
         save_path='all_figures/'+cell_line+'/single_replicate_analysis/'+target_rep+'/'
     
     for gene in gene_list:
-        plot_layer_smooth_vel(gene, mean_dict, bool_dict, CI_dict, count_dict,indiv_dict,boundary_dict,cell_line,single_rep=True,save_path=save_path+'layer_curve')
+        plot_layer_smooth_vel(gene, mean_dict, bool_dict, CI_dict, count_dict,exp_dict,exp_mean_dict,boundary_dict,cell_line,single_rep=True,save_path=save_path+'layer_curve')
         plot_curve_count(gene, mean_dict, bool_dict, CI_dict, count_dict,boundary_dict,cell_line,save_path=save_path+'curve_count')
 
                 
@@ -2117,6 +2701,53 @@ def chi_square_cell_line_phases(cell_line_1,folder_1,cell_line_2,folder_2,phase_
 
     return res
 
+
+def DEG_comparison_thresh_var(DEG_file_name,thresh_var_dict,ref_key,thresh_name,intersect):
+    """
+    Function which performs two comparisons with a DEG list.
+    It performs one with all provided cell lines, and a second with the provided intersect
+
+    Parameters
+    ----------
+    DEG_file_name : string
+        location and name of the DEG file.
+    thresh_var_dict : dictionnary
+        Dictionnary containing the log10 variance values for each cell line.
+    ref_key : string
+        String indicating the cell line to use as a reference in the intersect analysis.
+    thresh_name : string
+        string showing the threshold used.
+    intersect : list
+        list of gene names showing the intersect of the cell lines provided.
+
+    Returns
+    -------
+    None.
+
+    """
+    universe=[]
+    set_sig_dict={}
+    for cell_line in thresh_var_dict.keys():
+        universe=universe+list(thresh_var_dict[cell_line].gene_name)
+        set_sig_dict[cell_line]=set(list(thresh_var_dict[cell_line].gene_name[thresh_var_dict[cell_line].padjusted<0.01]))
+    #Filter based on threshold here
+    # cell_line_dict={'HaCat':thresh_subset_HaCat,'293t':thresh_subset_293t,'jurkat':thresh_subset_jurkat}
+    
+    #Function will also filter for significant genes
+    res_dict=create_TCGA_comparison_stat_results(thresh_var_dict,DEG_file_name,universe)
+    #Convert to dataframe and save
+    res_df=pd.DataFrame.from_dict(res_dict)
+    res_df.to_csv('analysis_results/TCGA_cell_line_comp_thresh_log10_'+thresh_name+'.csv')
+    
+    #Perform intersect analysis
+    ref_intersect=thresh_var_dict[ref_key][thresh_var_dict[ref_key].gene_name.isin(intersect)]
+    
+    intersect_cell_dict={'intersect':ref_intersect}
+    res_dict=create_TCGA_comparison_stat_results(intersect_cell_dict,DEG_file_name,universe)
+    #Convert to dataframe and save
+    res_df=pd.DataFrame.from_dict(res_dict)
+    res_df.to_csv('analysis_results/TCGA_cell_line_comp_intersect_log10_'+thresh_name+'.csv')
+
 def create_TCGA_comparison_stat_results(cell_line_gene_dict,DEG_file_name,universe):
     """
     Function intended to be used with a DEGc file from a TCGA analysis. However this
@@ -2182,17 +2813,29 @@ def create_TCGA_comparison_stat_results(cell_line_gene_dict,DEG_file_name,univer
                 
             #Build contingency table and run stat
             cont_table=np.array([[yes_1_yes_2,yes_2_no_1],[yes_1_no_2,no_1_no_2]])
-            res=stats.chi2_contingency(cont_table)
-            
-            #Build list of results - observed expected pvalue
-            expected_yes_yes=res[3][0][0]
-            observed_yes_yes=yes_1_yes_2
-            pvalue=res[1]
-            #Add results to dictionnary
+            print('##########')
+            print(cell_line)
+            print(phase)
+            print(cont_table)
             comp_res_dict['Cell_line'].append(cell_line)
             comp_res_dict['Phase'].append(phase)
-            comp_res_dict['Observed'].append(observed_yes_yes)
-            comp_res_dict['Expected'].append(expected_yes_yes)
-            comp_res_dict['pvalue'].append(pvalue)
+            if cont_table[0][0]==0 and cont_table[0][1]==0:
+                #Cannot do comparison
+                comp_res_dict['Observed'].append('No genes')
+                comp_res_dict['Expected'].append('No genes')
+                comp_res_dict['pvalue'].append('NA')
+            else:
+                res=stats.chi2_contingency(cont_table)
+                
+                #Build list of results - observed expected pvalue
+                expected_yes_yes=res[3][0][0]
+                observed_yes_yes=yes_1_yes_2
+                pvalue=res[1]
+                #Add results to dictionnary
+                comp_res_dict['Observed'].append(observed_yes_yes)
+                comp_res_dict['Expected'].append(expected_yes_yes)
+                comp_res_dict['pvalue'].append(pvalue)
             
     return(comp_res_dict)
+
+

@@ -30,7 +30,7 @@ rule velocyto_CC:
         "data_files/phase_reassigned/CC_{cell_line}_{replicate}.loom"
     params:
         script='snake_scripts/snake_velocyto.py',
-        num_k=220
+        num_k=550
     output:
         boundaries_csv="data_files/boundary_data/{cell_line}_{replicate}_boundaries.csv"
     log:
@@ -52,9 +52,9 @@ rule velocyto_iterations:
     params:
         script='snake_scripts/snake_vel_iterations.py',
         number_of_iterations=5,
-        num_k=220
+        num_k=550
     output:
-        vel_Iterations=directory('data_files/confidence_intervals/{cell_line}/{replicate}/Iterations')
+        vel_Iterations=directory('data_files/confidence_intervals/{cell_line}/{replicate}/Velocity_iterations')
     log:
         "logs/velocyto_CI_logs/{cell_line}_{replicate}.log"
     shell:
@@ -91,7 +91,7 @@ rule t_test_delay:
     output:
         ranked_genes='data_files/data_results/rank/{cell_line}/{replicate}_ranked_genes.csv',
         delay_genes='data_files/data_results/delay_genes/{cell_line}/{replicate}_delay_genes.csv',
-        t_test_res='data_files/data_results/delay_genes/{cell_line}/{replicate}_t_test_results.csv'
+        t_test_res='data_files/data_results/rank/{cell_line}/{replicate}_t_test_results.csv'
     log:
         'logs/t_test_delay_logs/{cell_line}_{replicate}.log'
     shell:

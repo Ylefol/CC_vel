@@ -6,8 +6,15 @@ Created on Fri Jul 23 09:36:01 2021
 @author: yohanl
 """
 
-from snake_functions import snake_utils as my_utils
-# from snake_scripts.snake_functions import snake_utils as my_utils
+# import snake_utils as my_utils
+#The 'snake_analysis_functions' can be called either through snakemake or 
+#through an analysis script. This changes the directore in which the utils
+#will be located. This block account for either option
+try:
+    from snake_functions import snake_utils as my_utils
+except:
+    from snake_scripts.snake_functions import snake_utils as my_utils
+
 
 import velocyto as vcy
 import numpy as np
@@ -214,11 +221,17 @@ def smooth_calcs(vlm, bin_size, window_size, spli_arr, unspli_arr, choice='mean'
         The array containing the modified spliced data.
     unspli_array : numpy nd.array
         The array containing the modifyed data.
+    spli_mean_array : numpy nd.array
+        The array containing the mean spliced data.
+    unspli_mean_array : numpy nd.array
+        The array containing the mean unspliced data.
     """
     
     orientation=np.unique(vlm.ca['orientation'])[0]
     spli_mean_array,unspli_mean_array=smooth_layers(vlm,bin_size=bin_size,window_size=window_size,spliced_array=spli_arr,unspliced_array=unspli_arr,orientation=orientation)
-    #Create proper 
+    
+    # spli_mean_array=spli_arr
+    # unspli_mean_array=unspli_arr    
     cell_axis=list(range(0,len(spli_mean_array)))
     if choice=='mean':
         return spli_mean_array,unspli_mean_array
@@ -227,8 +240,19 @@ def smooth_calcs(vlm, bin_size, window_size, spli_arr, unspli_arr, choice='mean'
         # deriv_unspli=np.diff(unspli_mean_array)/np.diff(vlm.ca["new_order"])
         deriv_spli=np.diff(spli_mean_array)/np.diff(cell_axis)
         deriv_unspli=np.diff(unspli_mean_array)/np.diff(cell_axis)
-        spli_array,unspli_array=smooth_layers(vlm,bin_size=bin_size,window_size=window_size,spliced_array=deriv_spli,unspliced_array=deriv_unspli,orientation=orientation)
-    return spli_array,unspli_array
+        
+        #Numpy.diff removes a value, so we extrapolate the in between value between the last number of the array and the first
+        #This regains the expected number of values.
+        new_value_spli=np.linspace(deriv_spli[-1],deriv_spli[0],num=3)[1]
+        new_value_unspli=np.linspace(deriv_unspli[-1],deriv_unspli[0],num=3)[1]
+        
+        deriv_spli=np.append(deriv_spli,new_value_spli)
+        deriv_unspli=np.append(deriv_unspli,new_value_unspli)
+        
+        # deriv_spli,deriv_unspli=smooth_layers(vlm,bin_size=bin_size,window_size=window_size,spliced_array=deriv_spli,unspliced_array=deriv_unspli,orientation=orientation)
+        # spli_mean_array,unspli_mean_array=smooth_layers(vlm,bin_size=bin_size,window_size=window_size,spliced_array=spli_mean_array,unspliced_array=unspli_mean_array,orientation=orientation)
+
+    return deriv_spli,deriv_unspli,spli_mean_array,unspli_mean_array
 
 
 
@@ -237,6 +261,8 @@ def create_smooth_vels(vlm,window_size,return_dict=False):
     Creates the smoothed velocities for both spliced and unspliced using the vlm object
     The smoothed velocities can be returned in dictionnary format or dataframe format
     
+    The Sx variable of the vlm object contains the Knn smoothed spliced expression
+
     Function written by Yohan Lefol
 
     Parameters
@@ -255,23 +281,41 @@ def create_smooth_vels(vlm,window_size,return_dict=False):
         The values for the smoothed spliced velocity.
     unspli_return : dictionnary or pandas dataframe
         The values for the smoothed unspliced velocity.
+    spli_mean_return : dictionnary or pandas dataframe
+        The values for the mean spliced values used to calculate velocity.
+    unspli_mean_return : dictionnary or pandas dataframe
+        The values for the mean unspliced values used to calculate velocity.
 
     """
     spli_dict={}
     unspli_dict={}
+    spli_mean_dict={}
+    unspli_mean_dict={}
+    
     for idx,val in enumerate(vlm.ra['Gene']):
-        deriv_spli,deriv_unspli=smooth_calcs(vlm,bin_size=100,window_size=window_size,spli_arr=vlm.Sx_sz[idx,:],unspli_arr=vlm.Ux_sz[idx,:],choice='vel')
+        # deriv_spli,deriv_unspli=smooth_calcs(vlm,bin_size=100,window_size=window_size,spli_arr=vlm.Sx_sz[idx,:],unspli_arr=vlm.Ux_sz[idx,:],choice='vel')
+        deriv_spli,deriv_unspli,spli_mean,unspli_mean=smooth_calcs(vlm,bin_size=100,window_size=window_size,spli_arr=vlm.Sx[idx,:],unspli_arr=vlm.Ux[idx,:],choice='vel')
+        
         spli_dict[val]=deriv_spli
         unspli_dict[val]=deriv_unspli
+        
+        spli_mean_dict[val]=spli_mean
+        unspli_mean_dict[val]=unspli_mean
     
     if return_dict==False:
         spli_return = pd.DataFrame.from_dict(spli_dict)
         unspli_return = pd.DataFrame.from_dict(unspli_dict)
+        
+        spli_mean_return = pd.DataFrame.from_dict(spli_mean_dict)
+        unspli_mean_return = pd.DataFrame.from_dict(unspli_mean_dict)
     else:
         spli_return = spli_dict
         unspli_return = unspli_dict
         
-    return spli_return,unspli_return
+        spli_mean_return = spli_mean_dict
+        unspli_mean_return = unspli_mean_dict
+        
+    return spli_return,unspli_return,spli_mean_return,unspli_mean_return
 
 
 #%% Plotting utils
@@ -548,9 +592,11 @@ def plot_markov(vlm, path=None):
         
 #%%Velocyto CI iteration functions
 
-def save_smooth_vels(vlm,the_dict, cell_line, replicate, layer,file_name):
+def save_smooth_vels(vlm,the_dict, cell_line, replicate, layer,file_name,iteration_name='Iterations'):
     """
     Function which saves the smoothed velocities from a dictionnary
+    The function can also be used to save the mean expression values used to
+    calculate the velocity as the dictionnaries have the same format.
 
     Parameters
     ----------
@@ -564,6 +610,9 @@ def save_smooth_vels(vlm,the_dict, cell_line, replicate, layer,file_name):
         a string containing the name of the layer (spliced or unspliced).
     file_name : string
         a string with the name to be given to the file that will be saved.
+    iteration_name : string
+        a string which gives the name of the iteration folder where the date will be
+        save. By default 'Iteration' which is expected to house the velocity data.
 
     Returns
     -------
@@ -573,7 +622,7 @@ def save_smooth_vels(vlm,the_dict, cell_line, replicate, layer,file_name):
     the_file=pd.DataFrame.from_dict(the_dict)
     the_file.index =list(vlm.ca['CellID'])
     # the_file.set_axis(list(vlm.ca['CellID']), inplace=True)
-    the_path='data_files/confidence_intervals/'+cell_line+'/'+replicate+'/Iterations/'+layer
+    the_path='data_files/confidence_intervals/'+cell_line+'/'+replicate+'/'+iteration_name+'/'+layer
     
     my_utils.create_folder(the_path)
         
@@ -581,7 +630,6 @@ def save_smooth_vels(vlm,the_dict, cell_line, replicate, layer,file_name):
     pickle.dump(the_file, bf, -1)
     bf.close()
     # the_file.to_csv(the_path+"/"+file_name+".csv",index=False)
-
 
 
 def save_vlm_values(vlm,cell_line,replicate,layer,file_name):
@@ -616,10 +664,10 @@ def save_vlm_values(vlm,cell_line,replicate,layer,file_name):
         my_utils.create_folder(save_path)
     
     if layer=='spliced':
-        vlm_df=pd.DataFrame(vlm.Sx_sz,index=list(vlm.ra['Gene']))
+        vlm_df=pd.DataFrame(vlm.Sx,index=list(vlm.ra['Gene']))
         vlm_df=vlm_df.transpose()
     else:#Layer is unspliced
-        vlm_df=pd.DataFrame(vlm.Ux_sz,index=list(vlm.ra['Gene']))
+        vlm_df=pd.DataFrame(vlm.Ux,index=list(vlm.ra['Gene']))
         vlm_df=vlm_df.transpose()
     
     vlm_df.index=list(vlm.ca['CellID'])
@@ -629,7 +677,69 @@ def save_vlm_values(vlm,cell_line,replicate,layer,file_name):
     bf.close()
     
     # vlm_df.to_csv(save_path+'/'+file_name+'.csv',index=False)
+
+
+def save_iteration_data(vlm, dta_to_save, cell_line, replicate, layer, file_name, save_choice):
+    """
+    Function which saves the velocities, expression data, or mean/smoothed expression from a dictionnary.c
+
+    Parameters
+    ----------
+    vlm : velocyto.analysis.VelocytoLoom
+        The loom file as read by velocyto.
+    dta_to_save : Dictionnary
+        Dictionnary containing the smoothed velocities.
+    cell_line : string
+        a string containing the name of the cell line being saved.
+    replicate : string
+        a string containing the name of the replicate being saved.
+    layer : string
+        a string containing the name of the layer (spliced or unspliced).
+    file_name : string
+        the name that will be given to the file.
+    save_choice : string
+        A string indicating what type of data is being saved. Either 'exp', 'exp_mean',
+        or 'vel'.
+
+    Returns
+    -------
+    None.
+
+    """
     
+    if save_choice=='vel':
+        folder_name='Velocity_iterations'
+    elif save_choice=='exp':
+        folder_name='Expression_iterations'
+    elif save_choice=='exp_mean':
+        folder_name='Smooth_expression_iterations'
+    else:
+        print('Incorrect save choice given')
+        return(None)
+    
+    save_path='data_files/confidence_intervals/'+cell_line+'/'+replicate+'/'+folder_name+'/'+layer
+    
+    if os.path.isdir(save_path) == False:
+        my_utils.create_folder(save_path)
+    
+    if save_choice =='exp':
+        if layer=='spliced':
+            dta_to_save=pd.DataFrame(vlm.Sx,index=list(vlm.ra['Gene']))
+            dta_to_save=dta_to_save.transpose()
+        else:#Layer is unspliced
+            dta_to_save=pd.DataFrame(vlm.Ux,index=list(vlm.ra['Gene']))
+            dta_to_save=dta_to_save.transpose()
+    else:
+        dta_to_save=pd.DataFrame.from_dict(dta_to_save)
+    
+    dta_to_save.index =list(vlm.ca['CellID'])
+    
+        
+    bf = open(save_path+"/"+file_name+".bin", "wb")
+    pickle.dump(dta_to_save, bf, -1)
+    bf.close()
+
+
 def calculate_mean_of_cells_optimized(path,z_val,do_CI,num_iter):
     """
     Calculates the mean velocity of each cell based on the amount of files that were created.

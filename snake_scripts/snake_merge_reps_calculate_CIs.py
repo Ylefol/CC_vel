@@ -44,16 +44,25 @@ my_utils.create_folder(path_to_results)
 layer_bool_dict={}
 for layer in layers:
     #Merge replicates of the layers
-    vel_gene_dict,smallest_reps=my_func.merge_replicates(main_path,replicates=replicates,layer=layer,do_vlm=False) 
+    vel_gene_dict,smallest_reps=my_func.merge_replicates(main_path,replicates=replicates,layer=layer,target_merge='velocity') 
 
     #Perform calculations for gene velocity means and confidence intervals
     vel_gene_dict,vel_up_CI,vel_low_CI,vel_stand_dev_dict=my_func.calculate_dta_mean_and_confidence_intervals(gene_dict=vel_gene_dict,replicates=replicates,do_CI=True,num_iter=numer_of_iterations,z_val=z_value_inputed)
     
     #Merge vlm replicates per layer
-    vlm_gene_dict,smallest_reps=my_func.merge_replicates(main_path,replicates=replicates,layer=layer,do_vlm=True) 
+    vlm_gene_dict,smallest_reps=my_func.merge_replicates(main_path,replicates=replicates,layer=layer,target_merge='expression') 
     
     #Perform calculations for gene vlm means and confidence intervals
     vlm_gene_dict,vlm_up_CI,vlm_low_CI,vlm_stand_dev_dict=my_func.calculate_dta_mean_and_confidence_intervals(gene_dict=vlm_gene_dict,replicates=replicates,do_CI=True,num_iter=numer_of_iterations,z_val=z_value_inputed)
+    
+    ####################
+    #Merge vlm replicates per layer
+    exp_mean_gene_dict,smallest_reps=my_func.merge_replicates(main_path,replicates=replicates,layer=layer,target_merge='mean_expression') 
+    
+    #Perform calculations for gene vlm means and confidence intervals
+    exp_mean_gene_dict,exp_mean_up_CI,exp_mean_low_CI,exp_mean_stand_dev_dict=my_func.calculate_dta_mean_and_confidence_intervals(gene_dict=exp_mean_gene_dict,replicates=replicates,do_CI=True,num_iter=numer_of_iterations,z_val=z_value_inputed)
+    ####################
+    
     
     #Create bool dict – indicates where confidence intervals are above or below 0
     merged_rep_bool=my_func.create_bool_dictionnary(gene_dict=vel_gene_dict,up_CIs=vel_up_CI,low_CIs=vel_low_CI)
@@ -80,39 +89,57 @@ for layer in layers:
             val_df[gene][pos_vals]=1
     
     #Save delay dataframe
-    val_df.to_csv(path_to_results+'/'+layer+"/counts.csv",index=False)
+    val_df.to_csv(path_to_results+'/'+layer+"/vel_counts.csv",index=False)
     
     #Save lower CI for velocity
     vel_low_df=pd.DataFrame.from_dict(vel_low_CI)
-    vel_low_df.to_csv(path_to_results+'/'+layer+"/low_CI.csv",index=False)
+    vel_low_df.to_csv(path_to_results+'/'+layer+"/vel_low_CI.csv",index=False)
     
     #Save upper CI for velocity
     vel_up_df=pd.DataFrame.from_dict(vel_up_CI)
-    vel_up_df.to_csv(path_to_results+'/'+layer+"/up_CI.csv",index=False)
+    vel_up_df.to_csv(path_to_results+'/'+layer+"/vel_up_CI.csv",index=False)
     
     #Save mean velocity values
     vel_gene_df=pd.DataFrame.from_dict(vel_gene_dict)
-    vel_gene_df.to_csv(path_to_results+'/'+layer+"/means.csv",index=False)
+    vel_gene_df.to_csv(path_to_results+'/'+layer+"/vel_means.csv",index=False)
     
     #Save combined standard deviation for velocity
     vel_stand_dev_df=pd.DataFrame.from_dict(vel_stand_dev_dict)
-    vel_stand_dev_df.to_csv(path_to_results+'/'+layer+"/combined_stdev.csv",index=False)
+    vel_stand_dev_df.to_csv(path_to_results+'/'+layer+"/vel_combined_stdev.csv",index=False)
     
     #Save lower CI for vlm
     vlm_low_df=pd.DataFrame.from_dict(vlm_low_CI)
-    vlm_low_df.to_csv(path_to_results+'/'+layer+"/vlm_low_CI.csv",index=False)
+    vlm_low_df.to_csv(path_to_results+'/'+layer+"/exp_low_CI.csv",index=False)
     
     #Save upper CI for vlm
     vlm_up_df=pd.DataFrame.from_dict(vlm_up_CI)
-    vlm_up_df.to_csv(path_to_results+'/'+layer+"/vlm_up_CI.csv",index=False)
+    vlm_up_df.to_csv(path_to_results+'/'+layer+"/exp_up_CI.csv",index=False)
     
     #Save mean vlm values
     vlm_gene_df=pd.DataFrame.from_dict(vlm_gene_dict)
-    vlm_gene_df.to_csv(path_to_results+'/'+layer+"/vlm_means.csv",index=False)
+    vlm_gene_df.to_csv(path_to_results+'/'+layer+"/exp_means.csv",index=False)
     
     #Save combined standard deviation for vlm
     vlm_stand_dev_df=pd.DataFrame.from_dict(vlm_stand_dev_dict)
-    vlm_stand_dev_df.to_csv(path_to_results+'/'+layer+"/vlm_combined_stdev.csv",index=False)
+    vlm_stand_dev_df.to_csv(path_to_results+'/'+layer+"/exp_combined_stdev.csv",index=False)
+
+
+    ####################
+    #Save lower CI for mean expression
+    vlm_low_df=pd.DataFrame.from_dict(exp_mean_low_CI)
+    vlm_low_df.to_csv(path_to_results+'/'+layer+"/smooth_expression_low_CI.csv",index=False)
+    
+    #Save upper CI for mean expression
+    vlm_up_df=pd.DataFrame.from_dict(exp_mean_up_CI)
+    vlm_up_df.to_csv(path_to_results+'/'+layer+"/smooth_expression_up_CI.csv",index=False)
+    
+    #Save mean mean expression
+    vlm_gene_df=pd.DataFrame.from_dict(exp_mean_gene_dict)
+    vlm_gene_df.to_csv(path_to_results+'/'+layer+"/smooth_expression_means.csv",index=False)
+    
+    #Save combined standard deviation for mean expression
+    vlm_stand_dev_df=pd.DataFrame.from_dict(exp_mean_stand_dev_dict)
+    vlm_stand_dev_df.to_csv(path_to_results+'/'+layer+"/smooth_expression_combined_stdev.csv",index=False)
 
 
 #Extracts boundary data based on the smallest replicate and saves it to the merged location

@@ -129,7 +129,7 @@ def balance_gene_dictionnary(gene_dict,target_gene):
 
 
 
-def merge_replicates(path,replicates,layer,do_vlm=False):
+def merge_replicates(path,replicates,layer,target_merge='velocity'):
     """
     A wrapper function which takes in iteration data, calls the functions to create 
     a dictionnary from the iteration data for each replicate, balance this dictionnary
@@ -144,9 +144,9 @@ def merge_replicates(path,replicates,layer,do_vlm=False):
         A list of strings for the replicates to be analyzed.
     layer : string
         Either 'unspliced' or 'spliced' to indicate which layer is being worked on.
-    do_vlm : Boolean, optional
-        Indicates if the data to be merged is velocity data or vlm (expression)
-        data. The default is False.
+    target_merge : string, optional
+        Choice of 'velocity','expression','mean_expression'. Indicates which elements
+        will be merged.
 
     Returns
     -------
@@ -159,10 +159,12 @@ def merge_replicates(path,replicates,layer,do_vlm=False):
     #Set up result dictionnaries
     merge_rep_gene_dict={}
     for replicate in replicates:
-        if do_vlm==False:
-            full_path=path+'/'+replicate+'/Iterations/'+layer
-        else:
-            full_path=path+'/'+replicate+'/vlm_vals_iters/'+layer
+        if target_merge=='velocity':
+            full_path=path+'/'+replicate+'/Velocity_iterations/'+layer
+        elif target_merge=='expression':
+            full_path=path+'/'+replicate+'/Expression_iterations/'+layer
+        elif target_merge=='mean_expression':
+            full_path=path+'/'+replicate+'/Smooth_expression_iterations/'+layer
         
         #Creates a dictionnary of genes for the replicate being iterated over
         merge_rep_gene_dict=create_dict_from_iters(gene_dict=merge_rep_gene_dict,path=full_path,replicate=replicate)

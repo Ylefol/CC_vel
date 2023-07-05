@@ -28,13 +28,13 @@ layers=['spliced','unspliced']
 #Load Sc data for the gene ranking
 Sc_dict={}
 for layer in layers:
-    Sc_dict[layer]=pd.read_csv('data_files/confidence_intervals/'+cell_line+'/merged_results/'+folder_to_use+'/'+layer+'/combined_stdev.csv')
+    Sc_dict[layer]=pd.read_csv('data_files/confidence_intervals/'+cell_line+'/merged_results/'+folder_to_use+'/'+layer+'/vel_combined_stdev.csv')
 
 mean_dict,CI_dict,bool_dict,count_dict,boundary_dict=my_utils.get_CI_data (cell_line, layers, folder_to_use)
 
 my_ranked_genes=my_func.create_gene_ranking(count_dict,mean_dict,CI_dict,Sc_dict,number_of_iterations)
 
-vlm_dict=my_utils.get_vlm_values(cell_line, layers,folder_to_use )
+vlm_dict=my_utils.get_vlm_values(cell_line, layers,folder_to_use)
 t_test_res=my_func.create_t_test_rank_method(my_ranked_genes,number_of_iterations,replicates,mean_dict,CI_dict,boundary_dict,vlm_dict)
 
 # my_start_phases=identify_vel_start_phases=my_func.identify_vel_start_phases(count_dict,mean_dict,CI_dict,boundary_dict)
@@ -52,7 +52,7 @@ my_delay_df=my_func.create_delay_dataframe(count_dict)
 
 my_ranked_genes.to_csv(sys.argv[3],index=False)
 my_delay_df.to_csv(sys.argv[4],index=False)
-t_test_res.to_csv(sys.argv[5],index=False)
+t_test_res.to_csv(sys.argv[5],index=True)
 
 # t_test_res.to_csv('data_files/data_results/rank/'+cell_line+'/'+folder_to_use+'_t_test_results.csv')
 

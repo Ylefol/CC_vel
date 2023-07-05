@@ -150,13 +150,13 @@ def get_CI_data(cell_line, layers, target_merger,gene_selection='all'):
     count_dict={}
     for layer in layers:
         bool_dict[layer]=pd.read_csv('data_files/confidence_intervals/'+cell_line+'/merged_results/'+target_merger+'/'+layer+'/bool.csv')
-        count_dict[layer]=pd.read_csv('data_files/confidence_intervals/'+cell_line+'/merged_results/'+target_merger+'/'+layer+'/counts.csv')
+        count_dict[layer]=pd.read_csv('data_files/confidence_intervals/'+cell_line+'/merged_results/'+target_merger+'/'+layer+'/vel_counts.csv')
     
         CI_dict[layer]={}
         for CI in ['low_CI','up_CI']:
-            CI_dict[layer][CI]=pd.read_csv('data_files/confidence_intervals/'+cell_line+'/merged_results/'+target_merger+'/'+layer+'/'+CI+'.csv')
+            CI_dict[layer][CI]=pd.read_csv('data_files/confidence_intervals/'+cell_line+'/merged_results/'+target_merger+'/'+layer+'/vel_'+CI+'.csv')
 
-        df_dict[layer]=pd.read_csv('data_files/confidence_intervals/'+cell_line+'/merged_results/'+target_merger+'/'+layer+'/means.csv')
+        df_dict[layer]=pd.read_csv('data_files/confidence_intervals/'+cell_line+'/merged_results/'+target_merger+'/'+layer+'/vel_means.csv')
     
     
     if gene_selection != 'all':
@@ -233,9 +233,9 @@ def get_CI_data_old (cell_line, replicates, layers, target_merger, single_rep=Fa
         
         
         if single_rep==True:
-            df_dict[str(layer+'_'+target_merger)]=pd.read_csv('data_files/confidence_intervals/'+cell_line+'/'+target_merger+'/'+layer+'/means.csv')
+            df_dict[str(layer+'_'+target_merger)]=pd.read_csv('data_files/confidence_intervals/'+cell_line+'/'+target_merger+'/'+layer+'/vel_means.csv')
         else:
-            df_dict[str(layer+'_'+target_merger)]=pd.read_csv('data_files/confidence_intervals/'+cell_line+'/merged_results/'+target_merger+'/'+layer+'/combined_mean.csv')
+            df_dict[str(layer+'_'+target_merger)]=pd.read_csv('data_files/confidence_intervals/'+cell_line+'/merged_results/'+target_merger+'/'+layer+'/vel_combined_mean.csv')
     
     
     if single_rep==True:
@@ -295,7 +295,7 @@ def get_CI_data_old (cell_line, replicates, layers, target_merger, single_rep=Fa
     
     return df_dict,CI_dict,bool_dict,count_dict,boundary_dict
 
-def get_vlm_values(cell_line,layers,target_folder):
+def get_vlm_values(cell_line,layers,target_folder,get_mean=False):
     """
     Simple fetch function which retrieves the spliced and unspliced values for each gene 
     of a replicates cell line. The retrieved values can be merged if required
@@ -310,6 +310,8 @@ def get_vlm_values(cell_line,layers,target_folder):
         Indicates the layers (Usually spliced and unspliced).
     target_folder : string
         String indicating the folder where the values are located
+    get_mean : boolean 
+        Boolean indicating if expression values should be retrieved or mean + smoothed expression values
 
     Returns
     -------
@@ -319,8 +321,11 @@ def get_vlm_values(cell_line,layers,target_folder):
     """
     df_dict={}
     for layer in layers:
-        df_dict[layer]=pd.read_csv('data_files/confidence_intervals/'+cell_line+'/merged_results/'+target_folder+'/'+layer+'/vlm_means.csv')
-        
+        if get_mean==False:
+            df_dict[layer]=pd.read_csv('data_files/confidence_intervals/'+cell_line+'/merged_results/'+target_folder+'/'+layer+'/exp_means.csv')
+        else:
+            df_dict[layer]=pd.read_csv('data_files/confidence_intervals/'+cell_line+'/merged_results/'+target_folder+'/'+layer+'/smooth_expression_means.csv')
+
     return df_dict
 
 
