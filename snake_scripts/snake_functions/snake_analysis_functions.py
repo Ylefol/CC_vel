@@ -1324,7 +1324,7 @@ def plot_layer_plot(ax,df_dict,df_dict_mean,boundary_dict,gene_name,orientation,
     if return_spli_ax==True:
         return(ax_2)
 
-def plot_vels_and_CIs(main_dict,subplot_coordinates,plot_title,boundary_dict,single_rep=False):
+def plot_vels_and_CIs(main_dict,subplot_coordinates,plot_title,boundary_dict):
     """
     Function which plots the mean values, along with the confidence intervals,
     as well as the boolean values in accordance with the confidence intervals.
@@ -1343,9 +1343,6 @@ def plot_vels_and_CIs(main_dict,subplot_coordinates,plot_title,boundary_dict,sin
         The title given to the plot.
     boundary_dict : dictionnary
         Dictionnary containing the boundaries for G1, S, and G2M.
-    single_rep : Boolean
-        Indicate if the gene is being plotted from the values of a single replicate
-        or merged replicates, this affects the presence of confidence intervals
         
     Returns
     -------
@@ -1358,11 +1355,10 @@ def plot_vels_and_CIs(main_dict,subplot_coordinates,plot_title,boundary_dict,sin
     ax.plot(range(len(main_dict['spli_data'])),main_dict['spli_data'],c="#B59AD6",zorder=3)
     ax.plot(range(len(main_dict['unspli_data'])),main_dict['unspli_data'],c="#CE9665",zorder=3)
     
-    if single_rep==False:
-        ax.plot(range(len(main_dict['spli_low_CI'])), main_dict['spli_low_CI'], c="k",linewidth=0.8,ls='-',zorder=3)
-        ax.plot(range(len(main_dict['unspli_low_CI'])), main_dict['unspli_low_CI'], c="k",linewidth=0.8,ls='-',zorder=3)
-        ax.plot(range(len(main_dict['spli_up_CI'])), main_dict['spli_up_CI'], c="k",linewidth=0.8,ls='--',zorder=3)
-        ax.plot(range(len(main_dict['unspli_up_CI'])), main_dict['unspli_up_CI'], c="k",linewidth=0.8,ls='--',zorder=3)
+    ax.plot(range(len(main_dict['spli_low_CI'])), main_dict['spli_low_CI'], c="k",linewidth=0.8,ls='-',zorder=3)
+    ax.plot(range(len(main_dict['unspli_low_CI'])), main_dict['unspli_low_CI'], c="k",linewidth=0.8,ls='-',zorder=3)
+    ax.plot(range(len(main_dict['spli_up_CI'])), main_dict['spli_up_CI'], c="k",linewidth=0.8,ls='--',zorder=3)
+    ax.plot(range(len(main_dict['unspli_up_CI'])), main_dict['unspli_up_CI'], c="k",linewidth=0.8,ls='--',zorder=3)
     
     # min_y_val,max_y_val=0,0
     # if min_y_val>np.min(main_dict['spli_data']):
@@ -1441,7 +1437,7 @@ def plot_vels_and_CIs(main_dict,subplot_coordinates,plot_title,boundary_dict,sin
     # plt.title(plot_title)
 
 
-def plot_layer_smooth_vel(gene_name, mean_dict, bool_dict, CI_dict, counts_dict,vlm_dict,vlm_mean_dict,boundary_dict,cell_line,save_path='',single_rep=False):
+def plot_layer_smooth_vel(gene_name, mean_dict, bool_dict, CI_dict, counts_dict,vlm_dict,vlm_mean_dict,boundary_dict,cell_line,save_path=''):
     """
     A wrapper function which creates a two plot figure:
     It plots the layer plot on the lef thand side and the curve/velocity plot
@@ -1474,9 +1470,6 @@ def plot_layer_smooth_vel(gene_name, mean_dict, bool_dict, CI_dict, counts_dict,
         String indicating the cell line being used.
     save_path : string, optional
         Path to which the figure will be saved. The default is ''.
-    single_rep : boolean, optional
-        Indicates if the plot is for a single replicate or not. If it is for a single replicate,
-        confidence intervals are removed. The default is False.
 
     Returns
     -------
@@ -1499,7 +1492,7 @@ def plot_layer_smooth_vel(gene_name, mean_dict, bool_dict, CI_dict, counts_dict,
     #Plot the velocity curve plot on the right hand side
     ax = plt.subplot(gs[1])
     main_dict=subset_the_dicts_merged_CI(gene_name,mean_dict,bool_dict,CI_dict)
-    plot_vels_and_CIs(main_dict,ax,plot_title=gene_name,boundary_dict=boundary_dict,single_rep=single_rep)
+    plot_vels_and_CIs(main_dict,ax,plot_title=gene_name,boundary_dict=boundary_dict)
     
     #Build the elements for the legend
     from matplotlib.lines import Line2D
@@ -1529,9 +1522,8 @@ def plot_layer_smooth_vel(gene_name, mean_dict, bool_dict, CI_dict, counts_dict,
     handles.append(G1_bar) 
     handles.append(S_bar) 
     
-    if single_rep==False:    
-        handles.append(lines_up) 
-        handles.append(lines_down) 
+    handles.append(lines_up) 
+    handles.append(lines_down) 
     
     plt.legend(handles=handles, bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.tight_layout()
@@ -1929,10 +1921,14 @@ def raincloud_for_cc_genes(main_df,target_phase):
     """
     #Start by setting up the data, one df per phase
     data_to_plot=[]
+    labels=[]
     exp_matrix=main_df[main_df.phase==target_phase]
     exp_matrix=exp_matrix.drop(columns=['Gene','phase'])
     for col in exp_matrix.columns:
         data_to_plot.append(exp_matrix[col].dropna())
+        #Get gene numbers
+        gene_num=len(exp_matrix[col][~exp_matrix[col].isnull()])
+        labels.append(col+' ('+str(gene_num)+')')
     
     #Set the style/background of the plot
     sns.set(style="whitegrid",font_scale=2)
@@ -1945,7 +1941,6 @@ def raincloud_for_cc_genes(main_df,target_phase):
     f, ax = plt.subplots(figsize=(12,6)  , dpi=100)
     ax=pt.RainCloud(data = data_to_plot, palette = colors, ax = ax, orient = 'v',offset=0.12)
     # set style for the axes
-    labels = list(exp_matrix.columns)
     for ax in [ax]:
         ax.xaxis.set_tick_params(direction='out')
         ax.xaxis.set_ticks_position('bottom')
@@ -2178,7 +2173,8 @@ def plot_velocity_expression_zero_point(vel_dict,vel_CI_dict,bool_dict,vlm_dict,
         orientation='G2M'
     
     #### Dimension set-up
-    plt.figure(None, (7.50,7.00), dpi=600)
+    # 9.00,3.92
+    plt.figure(None, (5,9.00), dpi=600)
     gs = plt.GridSpec(2,1) #2 rows 1 column
     
     #### Layer plot (top location)
@@ -2240,10 +2236,10 @@ def plot_velocity_expression_zero_point(vel_dict,vel_CI_dict,bool_dict,vlm_dict,
     handles.append(vel_zero_bar) 
     
     #### plot legend and title, correct layout, save plot
-    plt.legend(handles=handles, bbox_to_anchor=(1.05, 1))
+    # plt.legend(handles=handles, bbox_to_anchor=(1.05, 1))
     plt.tight_layout()
     #Use gene name as plot title
-    plt.suptitle(gene_name,ha='center',fontsize=20)
+    # plt.suptitle(gene_name,ha='center',fontsize=20)
     
     if plot_name=='':
         plot_name=gene_name+'.png'
@@ -2616,6 +2612,8 @@ def chi_square_cell_lines(cell_line_1,folder_1,cell_line_2,folder_2):
     
     #Build contingency table
     cont_table=np.array([[yes_1_yes_2,yes_2_no_1],[yes_1_no_2,no_1_no_2]])
+    print('common overlap')
+    print(cont_table)
     res=stats.chi2_contingency(cont_table)
     
     return res
@@ -2697,6 +2695,7 @@ def chi_square_cell_line_phases(cell_line_1,folder_1,cell_line_2,folder_2,phase_
     
     #Build contingency table
     cont_table=np.array([[yes_1_yes_2,yes_2_no_1],[yes_1_no_2,no_1_no_2]])
+    print(cont_table)
     res=stats.chi2_contingency(cont_table)
 
     return res

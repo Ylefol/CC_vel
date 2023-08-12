@@ -18,12 +18,12 @@ import pandas as pd
 
 
 #Set-up for the desired cell line and set of results
-cell_line='jurkat'
+cell_line='HaCat'
 replicates=os.listdir('data_files/confidence_intervals/'+cell_line)
 replicates.remove('merged_results')
 #Create layers, declare folder to use (either single replicate or merged replicates)
 layers=['spliced','unspliced']
-folder_to_use='A_B_C_D'
+folder_to_use='A_B'
 
 # Load various results
 mean_dict,CI_dict,bool_dict,count_dict,boundary_dict=my_utils.get_CI_data (cell_line, layers, folder_to_use)
@@ -69,7 +69,7 @@ my_func.plot_raincloud_delay(sig_delay,cell_line,save_path=delay_save_path,save_
 
 
 #Comparative raincloud plot
-my_func.raincloud_delay_two_files_two_categories(my_delay_df,sig_delay,'inc_to_+1','dec_to_0',cell_line+'_custom_delay.png')
+my_func.raincloud_delay_two_files_two_categories(my_rankable_delays,sig_delay,'inc_to_+1','dec_to_0',cell_line+'_custom_delay.png')
 
 
 # spearman delays

@@ -27,12 +27,15 @@ phase_associations=['phase_peak_vel','phase_peak_exp','phase_start_vel']
 #Results are stored in a list
 df_list=[]
 for comp in cell_line_comps:
+    print(comp)
     cell_res=my_func.chi_square_cell_lines(comp[0],cell_lines[comp[0]],comp[1],cell_lines[comp[1]])
     for cc_phase in phases:
         str_comp=comp[0]+'_'+comp[1]
         build_row=[str_comp,cell_res[1],cc_phase]
         phase_full_res=[]
+        print(cc_phase)
         for phase_asso in phase_associations:
+            print(phase_asso)
             phase_res=my_func.chi_square_cell_line_phases(comp[0],cell_lines[comp[0]],comp[1],cell_lines[comp[1]],cc_phase,phase_asso)
             build_row.append(phase_res[1])
         df_list.append(build_row)
@@ -73,12 +76,17 @@ with open('data_files/intersect_three_cell_lines.txt', 'w') as f:
 
 
 ############## Calculate observed and expected versus a DEG file (used TCGA analysis originally)
+#NOTE, THIS IS NOT THE VARIANCE FILTERED VERSION
 
 #Universe contains all genes that will be compared and more (due to non-significant cell line genes)
 universe = list(genes_HaCat.gene_name) + list(genes_293t.gene_name) + list(genes_jurkat.gene_name)
 
-cell_line_dict={'HaCat':genes_HaCat,'293t':genes_293t,'jurkat':genes_jurkat}
+genes_intersect=genes_HaCat[genes_HaCat.gene_name.isin(intersect)]
+
+cell_line_dict={'HaCat':genes_HaCat,'293t':genes_293t,'jurkat':genes_jurkat,'intersect':genes_intersect}
 DEG_file_name='compare_data/dataDEGs_no_dupCorr_up.csv'
+
+
 
 #Function will also filter for significant genes
 res_dict=my_func.create_TCGA_comparison_stat_results(cell_line_dict,DEG_file_name,universe)

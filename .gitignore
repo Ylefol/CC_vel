@@ -9,6 +9,12 @@ data_files/initial_data/*
 !data_files/initial_data/Original_cell_cycle_genes_with_new_candidates.csv
 !data_files/initial_data/smooth_params.txt
 
+#Ignore for now, will release on publication
+!data_files/initial_data/loom_files
+data_files/initial_data/loom_files/*
+!data_files/initial_data/loom_files/HaCat_A.loom
+data_files/initial_data/loom_files/HaCat_B.loom
+
 !data_files/initial_data/barcodes
 data_files/initial_data/barcodes/*
 
@@ -18,9 +24,7 @@ data_files/initial_data/barcodes/*
 
 !data_files/REAC_pathways
 
-#Ignore for now, will release on publication
-data_files/initial_data/loom_files/HaCat_A.loom
-data_files/initial_data/loom_files/HaCat_B.loom
+
 
 #Ignore logs
 logs
@@ -30,6 +34,7 @@ logs
 
 #Ignore R shenanigans
 .rhistory
+.Rhistory
 
 #Ignore results
 all_figures
@@ -39,6 +44,7 @@ R_scripts/TCGA_all_dta.rda
 
 #Ignore analysis results
 analysis_results
+delay_characterization
 
 #Ignore cython folder
 snake_scripts/snake_functions/__pycache__

@@ -11,7 +11,13 @@ runProfiler<- function(Genelist, Group.No, max_p_value=0.05){
 runProfiler2<- function(Genelist, Group.No, max_p_value=0.05){
   GO.df <- gost(Genelist, organism="hsapiens", significant=TRUE, user_threshold=max_p_value, correction_method="fdr", domain_scope="annotated", sources = c("GO", "KEGG", "REAC"))
   GO.df <- GO.df$result
-  if (nrow(GO.df) <= 0) return(NULL)
+  
+  #Make dummy df to return if NULL - prevent errors downstream
+  dummy_df<-data.frame('query'='query_1','significant'=FALSE,'p_value'=1,'term_size'=0,'query_size'=0,'intersection_size'=0,'precision'=0,
+                       'recall'=0,'term_id'='GO:0000000','source'='GO:NULL','term_name'='dummy_df','effective_domain_size'=0,'source_order'=0,
+                       'parents'='GO:0000000','OR'=0,'Group'='G0')
+  if (is.null(GO.df)==T) return(dummy_df)
+  if (nrow(GO.df) <= 0) return(dummy_df)
   Fisher.df <- data.frame(O.S = GO.df$intersection_size, Q.O = (GO.df$query_size - GO.df$intersection_size), Q.T = (GO.df$term_size - GO.df$intersection_size),
                           U = (25000 - GO.df$query_size - GO.df$term_size + GO.df$intersection_size))
   GO.df$OR <- apply(Fisher.df, 1, function(x) fisher.test(matrix(x, nr=2))$estimate)
