@@ -13,7 +13,7 @@ data_files/initial_data/*
 !data_files/initial_data/loom_files
 data_files/initial_data/loom_files/*
 !data_files/initial_data/loom_files/HaCat_A.loom
-data_files/initial_data/loom_files/HaCat_B.loom
+!data_files/initial_data/loom_files/HaCat_B.loom
 
 !data_files/initial_data/barcodes
 data_files/initial_data/barcodes/*
@@ -23,8 +23,6 @@ data_files/initial_data/barcodes/*
 !/data_files/initial_data/barcodes/HaCat_B_barcodes.txt
 
 !data_files/REAC_pathways
-
-
 
 #Ignore logs
 logs
