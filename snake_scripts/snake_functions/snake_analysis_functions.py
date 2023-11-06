@@ -8,7 +8,6 @@ Created on Fri Jul 23 11:53:14 2021
 
 import pandas as pd
 import numpy as np
-import pyranges as pr
 import scipy.stats as stats
 
 import statistics
@@ -722,6 +721,41 @@ def cell_line_var_REAC(vlm_mean_dict,boundary_dict):
     res_df=pd.DataFrame(dta_res_list,columns=['REAC_name','variance_norm_exp','variance_log10_exp'])
     res_df.to_csv('analysis_results/threshold_identification.csv', index=False)
     
+
+def find_variability_threshold(variability_df,REAC_files_path):
+    """
+    Function which takes in a dataframe containing variability values (normally log10)
+    with the indexes being gene names.
+    The function iterates over REACTOME pathways in a given path, it then calculates
+    the mean of the medians identified when subsetting the (log10) varibility
+    for each REAC pathway.
+    
+    The function returns the identified value
+
+    Parameters
+    ----------
+    variability_df : pandas dataframe
+        Dataframe containing an index of gene names and a column of values - intended
+        to be log10 variability values.
+    REAC_files_path : string
+        string giving a path to a folder containing csv files which have a list of 
+        genes belonging to a REAC pathway.
+
+    Returns
+    -------
+    TYPE float
+        The mean of the medians found for each REAC pathway.
+
+    """
+    median_list=[]
+    for file in os.listdir(REAC_files_path):
+        REAC_genes=pd.read_csv(REAC_files_path+file,header=None)[0]
+        
+        sub_dict=variability_df[variability_df.index.isin(REAC_genes)]
+        median_list.append(np.median(sub_dict))
+        
+    return np.mean(median_list)
+
 
 #%% Plotting calculations
 
@@ -2295,7 +2329,149 @@ def wrapper_plot_single_rep_genes(cell_line,replicates,target_rep,gene_list,save
         plot_layer_smooth_vel(gene, mean_dict, bool_dict, CI_dict, count_dict,exp_dict,exp_mean_dict,boundary_dict,cell_line,single_rep=True,save_path=save_path+'layer_curve')
         plot_curve_count(gene, mean_dict, bool_dict, CI_dict, count_dict,boundary_dict,cell_line,save_path=save_path+'curve_count')
 
-                
+
+def wrapper_chi_square_overlap(cell_line_dict,use_t_sig=True,delay_cat=None,use_var_sig=False,
+                               csv_save_name='data_files/data_results/chi_square_results.csv'):
+    """
+    Function which performs the chi-square overlap analysis for significant genes using the standard
+    t-test method. The function also performs phase overlap for the three types of phase assignment.
+    
+    This function is meant to help identify which phase assignment method works best.
+    
+    The function will build and save a CSV file with the relevant information.
+    This file willl be save in 'data_files/data_results'
+    
+    Parameters
+    ----------
+    cell_line_dict : dictionnary
+        A dictionnary containing the cell_line name as keys and the necessary 
+        access folder (ex: A_B). The dictionnary must contain at least two cell_lines
+        as this function performs a comparative gene overlap between two or more
+        cell_lines.
+    use_t_sig : boolean, optional
+        If t-test based significance should be used. The default is True.
+    delay_cat : string, optional
+        The category of delay to use in the search for significant genes
+        based on delay thresholding. The default is None.
+    use_var_sig : boolean, optional
+        If variability based significant genes should be used. The default is False.
+    csv_save_name : string, optional
+        The path + save name to be given to the CSV file produced by this wrapper
+
+    Returns
+    -------
+    None.
+
+    """
+    #Get all possible cell line comparisons
+    cell_line_comps=list(itertools.combinations(list(cell_line_dict.keys()), 2))
+    
+    #Establish phases and categories of phase association
+    phases=['G1','S','G2M']
+    phase_associations=['phase_peak_vel','phase_peak_exp','phase_start_vel']
+    
+    #Iterate over the cell lines, phases, phase association and perform overlap
+    #Results are stored in a list
+    df_list=[]
+    for comp in cell_line_comps:
+        print(comp)
+        
+        #Get delay genes
+        sig_genes_line_1=get_sig_genes(comp[0],cell_line_dict[comp[0]],
+                                               t_test_based=use_t_sig,
+                                               delay_type=delay_cat,
+                                               variability_based=use_var_sig)
+        
+        sig_genes_line_2=get_sig_genes(comp[1],cell_line_dict[comp[1]],
+                                               t_test_based=use_t_sig,
+                                               delay_type=delay_cat,
+                                               variability_based=use_var_sig)
+        
+        cell_res=var_chi_function(cell_line_dict,comp,sig_genes_line_1,sig_genes_line_2)
+        for cc_phase in phases:
+            str_comp=comp[0]+'_'+comp[1]
+            build_row=[str_comp,cell_res[-2],cell_res[-1],cell_res[1],cc_phase]
+            print(cc_phase)
+            for phase_asso in phase_associations:
+                print(phase_asso)
+                #Remember to check 'phase_use_sig'
+                phase_res=var_chi_function(cell_lines=cell_line_dict,comp=comp,sig_lst_1=sig_genes_line_1,sig_lst_2=sig_genes_line_2,
+                                                   phase_check=cc_phase,phase_use_sig=True,comparison_cat=phase_asso)
+                build_row.append(phase_res[-2])
+                build_row.append(phase_res[-1])
+                build_row.append(phase_res[1])
+            df_list.append(build_row)
+            print('####')
+        print('#########################')
+    #Convert list to pandas dataframe
+    col_names=['cell_lines',
+               'gene overlap (cont table)','gene overlap (odds ratio)','gene overlap (pvalue)',
+               'phase',
+               phase_associations[0]+' (cont table)',phase_associations[0]+' (odds ratio)',phase_associations[0]+' (pvalue)',
+               phase_associations[1]+' (cont table)',phase_associations[1]+' (odds ratio)',phase_associations[1]+' (pvalue)',
+               phase_associations[2]+' (cont table)',phase_associations[2]+' (odds ratio)',phase_associations[2]+' (pvalue)']
+    chi_df=pd.DataFrame(df_list,columns=col_names)
+    #Save chi-square (overlap) results
+    chi_df.to_csv(csv_save_name,index=False)
+    
+    
+    
+    
+def identify_cell_line_variability_thresholds(cell_dict,REAC_path='data_files/REAC_pathways/',save_results=True):
+    """
+    Function which identifies the variability threshold for each cell line based
+    on the percentage of variability found within a set of REACTOME pathways.
+    
+    The function calculates teh variance and converts it to a log10 format, it then
+    calculates the mean of the medians of the different REACTOME pathways. This serves
+    as the threshold.
+    
+    The function then retrieves the t-test results and subsets this to contain
+    the genes which pass the variability filter. If stated, each cell line will be 
+    saved as an individual csv file, with the name containing the identified filter
+    threshold. In any case, the function will return a dictionnary with the subseted
+    results.
+
+    Parameters
+    ----------
+    cell_dict : dictionnary
+        A dictionnary with cell lines as keys and target folders as values to those keys.
+    REAC_path : string, optional
+        A string giving the location of the files containing the REACTOME files,
+        which contain the genes belonging to those pathways. 
+        The default is 'data_files/REAC_pathways/'.
+    save_results : Boolean, optional
+        If the results should be saved to CSV files or not. The default is True.
+
+    Returns
+    -------
+    var_thresh_dict : Dictionnary
+        A dictionnary containing the variability filtered results for the submitted
+        cell lines..
+
+    """
+    
+    #Returns the log10 variance - thresholding performed on log10 values
+    cell_var_dict=create_cell_line_variance_dictionnary(cell_dict)
+    
+    var_thresh_dict={}
+    for target_cell_line in cell_var_dict.keys():
+        
+        #Identify threshold
+        thresh=find_variability_threshold(cell_var_dict[target_cell_line],REAC_path)
+        thresh_name=str(round(thresh,5)).replace('.', '')
+            
+        thresh_genes=list(cell_var_dict[target_cell_line][cell_var_dict[target_cell_line]>thresh].index)
+        genes_t_res=pd.read_csv('data_files/data_results/rank/'+target_cell_line+'/'+cell_dict[target_cell_line]+'_t_test_results.csv')
+        thresh_subset=genes_t_res[genes_t_res.gene_name.isin(thresh_genes)]    
+        var_thresh_dict[target_cell_line]=thresh_subset
+        if save_results==True:
+            thresh_subset.to_csv('analysis_results/'+target_cell_line+'_'+thresh_name+'_thresh.csv',index=False)
+        
+    return var_thresh_dict
+
+
+
 #%% statistical analysis functions
 
 def find_phase_association(gene_df,mean_dict,CI_dict,boundary_dict,vlm_dict,layer='spliced',CI='low_CI'):
@@ -2547,157 +2723,118 @@ def spearman_delay_categories(delay_dataframe):
     return df
 
 
-def chi_square_cell_lines(cell_line_1,folder_1,cell_line_2,folder_2):
+def var_chi_function(cell_lines,comp,sig_lst_1=None,sig_lst_2=None,phase_check=None,phase_use_sig=False,comparison_cat='phase_peak_exp'):
     """
-    Function which performs a chi square test between the significant genes
-    found in two cell lines of choice.
+    Function which performs a chisquare analysis for gene overlap. The function can 
+    be used in a variety of ways.
     
-    The function will retrieve the set score results for the two cell lines then 
-    remove any genes which are unique for either cell line. A contingency table is built 
-    and the chi square results are returned.
+    A general overlap (irrelevant of cell cycle phase) can be performed. Or a phase
+    overlap (has the same phase been assigned to both genes in both cell lines) can
+    be done. In the case of the general overlap, by default it will take the t-test
+    results and if no significant gene lists are provided, it will use an adjusted 
+    pvalue of 0.01 to measure significance.
+    The main utility is that the user provides two lists of 'significant' genes for
+    the general overlap. Thus the t-test results can be used to create the background
+    or universe of the analysis.
+    
+    In the case of phase assignement overlap, the default is to check all genes in
+    the background/universe, but the analysis can be tailored to verify only the phase
+    assignment of specific genes
 
     Parameters
     ----------
-    cell_line_1 : string
-        String definining one of the two cell lines to be compared.
-    folder_1 : string
-        String definining the folder (replicate) to use for the first cell line
-    cell_line_2 : string
-        String definining one of the two cell lines to be compared.
-    folder_2 : string
-        String definining the folder (replicate) to use for the second cell line
+    cell_lines : Dictionnary
+        A dictionnary containing cell line names as the key and the target folder
+        as the value.
+    comp : list
+        A list with two elements, both of which are cell line names which illustrate
+        the cell lines that will be compared.
+    sig_lst_1 : list, optional
+        A list of gene names which are 'significant' for the first cell line. The default is None.
+    sig_lst_2 : list, optional
+        A list of gene names which are 'significant' for the second cell line.. The default is None.
+    phase_check : string, optional
+        Either G1, S, or G2M. This is the phase whose overlap will be compared. The default is None.
+    phase_use_sig : boolean, optional
+        Wether or not to use significant genes as the background in the phase overlap segment. 
+        The default is False.
+    comparison_cat : string, optional
+        In the case of phase overlap, which category should be used to measure the overlap.
+        The default is 'phase_peak_exp'.
 
     Returns
     -------
-    None.
+    res : float
+        Chi square results along with the contingency table and the odds ratio.
 
     """
-    ranks_line_1=pd.read_csv('data_files/data_results/rank/'+cell_line_1+'/'+folder_1+'_t_test_results.csv')
-    ranks_line_2=pd.read_csv('data_files/data_results/rank/'+cell_line_2+'/'+folder_2+'_t_test_results.csv')
+    ranks_line_1=pd.read_csv('data_files/data_results/rank/'+comp[0]+'/'+cell_lines[comp[0]]+'_t_test_results.csv')
+    ranks_line_2=pd.read_csv('data_files/data_results/rank/'+comp[1]+'/'+cell_lines[comp[1]]+'_t_test_results.csv')
     
-    # #Find common genes
-    # common_genes=[]
-    # for gene in ranks_line_1.gene_name.values:
-    #     if gene in ranks_line_2.gene_name.values:
-    #         common_genes.append(gene)
+    if sig_lst_1==None and sig_lst_2==None:
+        sig_lst_1=list(ranks_line_1.gene_name[ranks_line_1.padjusted<0.01])
+        sig_lst_2=list(ranks_line_2.gene_name[ranks_line_2.padjusted<0.01])
+    
+    non_sig_genes_line_1=list(ranks_line_1.gene_name[~ranks_line_1.gene_name.isin(sig_lst_1)])
+    non_sig_genes_line_2=list(ranks_line_2.gene_name[~ranks_line_2.gene_name.isin(sig_lst_2)])
+    
+    if phase_check==None:
+        yes_1_yes_2=0
+        yes_1_no_2=0
+        yes_2_no_1=0
+        for gene in sig_lst_1:
+            if gene in sig_lst_2:
+                yes_1_yes_2+=1
+        
+        yes_1_no_2=len(sig_lst_1)-yes_1_yes_2
+        yes_2_no_1=len(sig_lst_2)-yes_1_yes_2
+        
+        no_1_no_2=0
+        all_non_sigs=list(set(non_sig_genes_line_1+non_sig_genes_line_2))
+        for gene in all_non_sigs:
+            if gene not in sig_lst_1:
+                if gene not in sig_lst_2:
+                    no_1_no_2+=1
+    else:
+        if phase_use_sig==False:
+            universe=list(ranks_line_1.gene_name)+list(ranks_line_2.gene_name)
+        else:
+            universe=list(sig_lst_1+sig_lst_2)
+        universe=list(set(universe))
+        yes_1_yes_2=0
+        yes_2_no_1=0
+        yes_1_no_2=0
+        no_1_no_2=0
+        for gene in universe:
+            phase_line_1=ranks_line_1[comparison_cat][ranks_line_1.gene_name==gene].values
+            if len(phase_line_1)>0:
+                phase_line_1=phase_line_1[0]
+            else:
+                phase_line_1=None
+                
+            phase_line_2=ranks_line_2[comparison_cat][ranks_line_2.gene_name==gene].values
+            if len(phase_line_2)>0:
+                phase_line_2=phase_line_2[0]
+            else:
+                phase_line_2=None
             
-    # #Filter files to contain only common genes across cell lines
-    # ranks_line_1=ranks_line_1[ranks_line_1.gene_name.isin(common_genes)]
-    # ranks_line_2=ranks_line_2[ranks_line_2.gene_name.isin(common_genes)]
-    
-    sig_genes_line_1=list(ranks_line_1.gene_name[ranks_line_1.t>0])
-    non_sig_genes_line_1=list(ranks_line_1.gene_name[ranks_line_1.t==0])
-    
-    
-    sig_genes_line_2=list(ranks_line_2.gene_name[ranks_line_2.t>0])
-    non_sig_genes_line_2=list(ranks_line_2.gene_name[ranks_line_2.t==0])
-
-    yes_1_yes_2=0
-    yes_1_no_2=0
-    yes_2_no_1=0
-    for gene in sig_genes_line_1:
-        if gene in sig_genes_line_2:
-            yes_1_yes_2+=1
-    
-    yes_1_no_2=len(sig_genes_line_1)-yes_1_yes_2
-    yes_2_no_1=len(sig_genes_line_2)-yes_1_yes_2
-    
-    no_1_no_2=0
-    all_non_sigs=list(set(non_sig_genes_line_1+non_sig_genes_line_2))
-    for gene in all_non_sigs:
-        if gene not in sig_genes_line_1:
-            if gene not in sig_genes_line_2:
+        
+            if phase_line_1 == phase_check and phase_line_2 == phase_check:
+                yes_1_yes_2+=1
+            elif phase_line_1 == phase_check and phase_line_2 != phase_check:
+                yes_1_no_2+=1
+            elif phase_line_1 != phase_check and phase_line_2 == phase_check:
+                yes_2_no_1+=1
+            else:
                 no_1_no_2+=1
     
     
     #Build contingency table
     cont_table=np.array([[yes_1_yes_2,yes_2_no_1],[yes_1_no_2,no_1_no_2]])
-    print('common overlap')
-    print(cont_table)
+
+    odds_ratio=(yes_1_yes_2/yes_1_no_2)/(yes_2_no_1/no_1_no_2)
     res=stats.chi2_contingency(cont_table)
-    
-    return res
-
-
-
-
-def chi_square_cell_line_phases(cell_line_1,folder_1,cell_line_2,folder_2,phase_check,comparison_cat):
-    """
-    A function which performs a chi square test for the phase overlap
-    of genes found in two different cell lines. 
-    The function first removes any genes unique to either cell line.
-    It then takes in the comparison category and the phase to check.
-    
-    The function will build the contingency table accordingle and return the chi square results.
-
-    Parameters
-    ----------
-    cell_line_1 : string
-        String definining one of the two cell lines to be compared.
-    folder_1 : string
-        String definining the folder (replicate) to use for the first cell line
-    cell_line_2 : string
-        String definining one of the two cell lines to be compared.
-    folder_2 : string
-        String definining the folder (replicate) to use for the second cell line
-    phase_check : string
-        The phase to be used to check overlap (G1,S,G2M).
-    comparison_cat : string
-        A string indication which phase association to use. Phase at peak velocity (phase_peak_vel),
-        phase at peak expression (phase_peak_exp), or phase at start of active transcription (phase_start_vel)
-
-    Returns
-    -------
-    None.
-
-    """
-    ranks_line_1=pd.read_csv('data_files/data_results/rank/'+cell_line_1+'/'+folder_1+'_t_test_results.csv')
-    ranks_line_2=pd.read_csv('data_files/data_results/rank/'+cell_line_2+'/'+folder_2+'_t_test_results.csv')
-
-    # #Find common genes
-    # common_genes=[]
-    # for gene in ranks_line_1.gene_name.values:
-    #     if gene in ranks_line_2.gene_name.values:
-    #         common_genes.append(gene)
-    
-    # #Filter files to contain only common genes across cell lines
-    # ranks_line_1=ranks_line_1[ranks_line_1.gene_name.isin(common_genes)]
-    # ranks_line_2=ranks_line_2[ranks_line_2.gene_name.isin(common_genes)]
-    
-    genes_to_check=list(ranks_line_1.gene_name)
-    
-    yes_1_yes_2=0
-    yes_2_no_1=0
-    yes_1_no_2=0
-    no_1_no_2=0
-    for gene in genes_to_check:
-        phase_line_1=ranks_line_1[comparison_cat][ranks_line_1.gene_name==gene].values
-        if len(phase_line_1)>0:
-            phase_line_1=phase_line_1[0]
-        else:
-            phase_line_1=None
-            
-        phase_line_2=ranks_line_2[comparison_cat][ranks_line_2.gene_name==gene].values
-        if len(phase_line_2)>0:
-            phase_line_2=phase_line_2[0]
-        else:
-            phase_line_2=None
-        
-    
-        if phase_line_1 == phase_check and phase_line_2 == phase_check:
-            yes_1_yes_2+=1
-        elif phase_line_1 == phase_check and phase_line_2 != phase_check:
-            yes_1_no_2+=1
-        elif phase_line_1 != phase_check and phase_line_2 == phase_check:
-            yes_2_no_1+=1
-        else:
-            no_1_no_2+=1
-    
-    #Build contingency table
-    cont_table=np.array([[yes_1_yes_2,yes_2_no_1],[yes_1_no_2,no_1_no_2]])
-    print(cont_table)
-    res=stats.chi2_contingency(cont_table)
-
+    res=res+(cont_table,odds_ratio,)
     return res
 
 
@@ -2816,6 +2953,8 @@ def create_TCGA_comparison_stat_results(cell_line_gene_dict,DEG_file_name,univer
             print(cell_line)
             print(phase)
             print(cont_table)
+            print('Odds ratio: ')
+            print((yes_1_yes_2/yes_1_no_2)/(yes_2_no_1/no_1_no_2))
             comp_res_dict['Cell_line'].append(cell_line)
             comp_res_dict['Phase'].append(phase)
             if cont_table[0][0]==0 and cont_table[0][1]==0:
@@ -2837,4 +2976,271 @@ def create_TCGA_comparison_stat_results(cell_line_gene_dict,DEG_file_name,univer
             
     return(comp_res_dict)
 
+def get_sig_genes(cell_line,target_folder,t_test_based=True,delay_type=None,variability_based=False):
+    """
+    Basic function which retrieves significant genes based on either a t-test file,
+    a variability file, or a delay analysis.
+
+    Parameters
+    ----------
+    cell_line : string
+        String indicating the cell_line to be used.
+    target_folder : string
+        Indicates the folder to access.
+    t_test_based : boolean, optional
+        If t-test based significance should be used. The default is True.
+    delay_type : string, optional
+        The category of delay to use in the search for significant genes
+        based on delay thresholding. The default is None.
+    variability_based : boolean, optional
+        If variability based significant genes should be used. The default is False.
+
+    Returns
+    -------
+    return_genes : list
+        list of requested significant genes.
+
+    """
+    if t_test_based:
+        t_test_file=pd.read_csv('data_files/data_results/rank/'+cell_line+'/'+target_folder+'_t_test_results.csv')
+        t_sig=list(t_test_file.gene_name[t_test_file.padjusted<0.01])
+    else:
+        t_sig=None
+        
+    if delay_type != None:
+        #Create input for gmm of delays
+        input_dict={}
+        input_dict[cell_line]=target_folder
+        
+        #Perform gmm split of delay curves, identify threshold
+        gmm_dictionnary=create_GMM_dict(cell_line_dictionnary=input_dict,gmm_n_comp=3,use_sig_genes=True,log10_transform=False)
+        delay_thresh=identify_delay_threshold(gmm_dictionnary,cell_line,delay_category=delay_type)
+        
+        #Retrieve genes based on threshold
+        delay_df=pd.read_csv('data_files/data_results/delay_genes/'+cell_line+'/'+target_folder+'_delay_genes.csv')
+        delay_sig=list(delay_df.gene_name[delay_df[delay_type]>delay_thresh])
+    else:
+        delay_sig=None
+        
+    if variability_based:
+        target_file=[x for x in os.listdir('analysis_results/automated_thresh/') if x.startswith(cell_line)][0]
+        var_file=pd.read_csv('analysis_results/automated_thresh/'+target_file)
+        var_sig=list(var_file.gene_name)
+    else:
+        var_sig=None
+    
+    
+    return_genes=list(set.intersection(*(set(x) for x in [t_sig, delay_sig, var_sig] if x)))
+
+    return return_genes
+
+
+#%% GMM analysis functions
+
+from sklearn.mixture import GaussianMixture
+
+def create_GMM_dict(cell_line_dictionnary,gmm_n_comp=3,use_sig_genes=True,log10_transform=False):
+    """
+    Function which utilizes gaussian mixture modelling to split a multimodal curve into
+    distinct unimodal curves. 
+    The function was specifically designed to take in a dictionnary (one cell line per key)
+    with each key containing a dataframe of delay values. These have been observed to have
+    a trimodal distribution.
+    The function will adjust the delay dataframes based on parameters - 
+    wether or not significant genes (only) should be used, or if the data should
+    be log10 transformed.
+
+    Parameters
+    ----------
+    cell_line_dictionnary : dictionnary
+        Dictionnary where keys are cell lines and values are delay dataframes.
+    gmm_n_comp : int, optional
+        The number of modalities in the dataframes within the dictionnary. The default is 3.
+    use_sig_genes : boolean, optional
+        To limit the use of genes to significant ones. The default is True.
+    log10_transform : boolean, optional
+        If the delay values should be log10 transformed. The default is False.
+
+    Returns
+    -------
+    delay_dict : dictionnary
+        A similar dictionnary to the inputed one, but with one class column added
+        per delay category. This column will contain a number between 0 and gmm_n_comp indicating
+        to which curve that value/gene belongs to.
+        for example, one new column name would be 'inc_to_+1_class'
+
+    """
+    delay_dict={}
+
+    for cell_line in cell_line_dictionnary.keys():
+        delay_df=pd.read_csv('data_files/data_results/delay_genes/'+cell_line+'/'+cell_line_dictionnary[cell_line]+'_delay_genes.csv')
+        if use_sig_genes:
+            t_test_res=pd.read_csv('data_files/data_results/rank/'+cell_line+'/'+cell_line_dictionnary[cell_line]+'_t_test_results.csv')
+            res = [i for i in t_test_res.padjusted if i != 'NA']
+            good_vals=[x for x in res if x<0.01]
+            significant_genes=list(t_test_res.loc[t_test_res['padjusted'] .isin(good_vals)].gene_name)
+            delay_df=delay_df[delay_df['gene_name'] .isin(significant_genes)]
+
+        if log10_transform:
+            delay_df['inc_to_0'] = my_utils.log10_dta(delay_df,'inc_to_0')
+            delay_df['inc_to_+1'] = my_utils.log10_dta(delay_df,'inc_to_+1')
+            delay_df['dec_to_0'] = my_utils.log10_dta(delay_df,'dec_to_0')
+            delay_df['dec_to_-1'] = my_utils.log10_dta(delay_df,'dec_to_-1')
+
+        gmm = GaussianMixture(n_components=gmm_n_comp, covariance_type='tied')
+
+        delay_types=['inc_to_0','inc_to_+1','dec_to_0','dec_to_-1']
+
+        for d_type in delay_types:
+            gmm.fit(delay_df[d_type].values.reshape(-1, 1))
+            
+            col_class_name=d_type+'_class'
+            delay_df[col_class_name]=gmm.predict(delay_df[d_type].values.reshape(-1, 1))
+        
+        delay_dict[cell_line]=delay_df.copy()
+    
+    return delay_dict
+
+
+
+def plot_GMM_res_three_cell_lines(gmm_dict,plot_save_name='gmm_res.png'):
+    """
+    Function which plots the multimodal and gmm identified curves of each cell line
+    of the dictionnary as well as each delay types.
+    
+    Due to hard coding certain elements, the dictionnary should have three cell lines
+    and four delay parameters.
+
+    Parameters
+    ----------
+    gmm_dict : dictionnary
+        A dictionnary as produced by the 'create_GMM_dict' function.
+    plot_save_name : string, optional
+        The save name for the plot. The default is 'gmm_res.png'.
+
+    Returns
+    -------
+    None.
+
+    """
+    delay_types=['inc_to_0','inc_to_+1','dec_to_0','dec_to_-1']
+
+    f, ax = plt.subplots(nrows=4, ncols=6, figsize=(55, 35))
+    # f.subplots_adjust(top=0.78) 
+    for idx_cell,cell_line in enumerate(gmm_dict.keys()):
+        loc_before_GMM=idx_cell*2
+        loc_after_GMM=loc_before_GMM+1
+        
+        delay_df=gmm_dict[cell_line]
+        for idx_d,d_type in enumerate(delay_types):
+            
+            sns.kdeplot(data=delay_df[d_type], ax=ax[idx_d,loc_before_GMM],lw=2)
+            ax[idx_d,loc_before_GMM].set_title('Before GMM', fontsize=16)
+            ax[idx_d,loc_before_GMM].set_xlabel(d_type, fontsize = 15)
+            ax[idx_d,loc_before_GMM].set_ylabel('Density', fontsize = 15)
+            
+            sns.kdeplot(data=delay_df[delay_df[d_type+'_class']==0][d_type], label='Component 1', ax=ax[idx_d,loc_after_GMM],lw=2)
+            sns.kdeplot(data=delay_df[delay_df[d_type+'_class']==1][d_type], label='Component 2', ax=ax[idx_d,loc_after_GMM],lw=2)
+            sns.kdeplot(data=delay_df[delay_df[d_type+'_class']==2][d_type], label='Component 3', ax=ax[idx_d,loc_after_GMM],lw=2)
+            
+            
+            
+            ax[idx_d,loc_after_GMM].set_title('After GMM', fontsize=16)
+            ax[idx_d,loc_after_GMM].set_xlabel(d_type, fontsize = 15)
+            ax[idx_d,loc_after_GMM].set_ylabel('Density', fontsize = 15)
+            
+            #Identify top-left coordinates for text overlay
+            delay_thresh=identify_delay_threshold(gmm_dict,cell_line,d_type)
+            custom_text='delay threshold:\n'+str(delay_thresh.round(2))
+            ax[idx_d,loc_after_GMM].text(0.6, 0.9, custom_text, ha='left', va='top', 
+                                         transform=ax[idx_d,loc_after_GMM].transAxes,size=20)
+    
+    #Separate the three cell lines with vertical lines
+    line = plt.Line2D((0.3725, 0.3725),[0.1,0.9], transform=f.transFigure, color="black",linewidth=5)
+    f.add_artist(line)
+    line = plt.Line2D((0.638, 0.638),[0.1,0.9], transform=f.transFigure, color="black",linewidth=5)
+    f.add_artist(line)
+    
+    
+    #Add cell line titles
+    # plt.figtext(0.245,0.90,list(gmm_dict.keys())[0], va="center", ha="center", size=50)
+    # plt.figtext(0.515,0.90,list(gmm_dict.keys())[1], va="center", ha="center", size=50)
+    # plt.figtext(0.78,0.90,list(gmm_dict.keys())[2], va="center", ha="center", size=50)
+    
+    #Custom titles ofr formatting
+    plt.figtext(0.245,0.90,'HaCaT', va="center", ha="center", size=50)
+    plt.figtext(0.515,0.90,'Jurkat', va="center", ha="center", size=50)
+    plt.figtext(0.78,0.90,'293T', va="center", ha="center", size=50)
+    
+    #Add delay category titles
+    plt.figtext(0.095,0.80,delay_types[0], va="center", ha="center", size=50,rotation=90)
+    plt.figtext(0.095,0.60,delay_types[1], va="center", ha="center", size=50,rotation=90)
+    plt.figtext(0.095,0.40,delay_types[2], va="center", ha="center", size=50,rotation=90)
+    plt.figtext(0.095,0.20,delay_types[3], va="center", ha="center", size=50,rotation=90)
+        
+    
+    plt.savefig(plot_save_name, bbox_inches='tight')
+
+
+
+def identify_delay_threshold(gmm_dict,cell_line,delay_category='inc_to_+1'):
+    """
+    Function which identifies the delay threshold (both direct number and kernel
+    density value) using the gmm cruves.
+    It starts by checking if there is a curve which contains only zeros, if that is the case
+    it will look for the curve which does not contain the negative most number and
+    utilize that curve for threshold identification.
+    If that is not the case, it will identify the curve with a mean closest to 0
+    and utilize that curve for the threshold identification
+    
+    The threshold is then calculated using the percent point function (qnorm in R)
+    where the target curve is isolated, its mean and standard deviation are calculated
+    for the ppf function, which by default looks for the 95th percent.
+
+    Parameters
+    ----------
+    gmm_dict : dictionnary
+        A dictionnary as create by the 'create_GMM_dict' function.
+    cell_line : string
+        The cell line of interest.
+    delay_category : string, optional
+        The delay category to be used to identify the threshold. The default is 'inc_to_+1'.
+
+    Returns
+    -------
+    list
+        The returned value from the ppf function
+
+    """
+    gmm_delay_dta=gmm_dict[cell_line]
+    
+    zero_curve=None
+    mean_dict={}
+    for i in [0,1,2]:
+        sub_data=gmm_delay_dta[delay_category][gmm_delay_dta[delay_category+'_class']==i]
+        if len(sub_data[sub_data!=0])==0:
+            zero_curve=i
+        mean_dict[i]=np.mean(sub_data)
+        
+    if zero_curve!=None: #Take row that does not contain the most negative number
+        negative_class=gmm_delay_dta[delay_category+'_class'][gmm_delay_dta[delay_category]==np.min(gmm_delay_dta[delay_category])]
+        negative_class=negative_class.values[0]
+        for i in [0,1,2]:
+            if i == zero_curve:
+                next
+            elif i == negative_class:
+                next
+            else:
+                target_class=i
+    else:
+        target_class, res_val = min(mean_dict.items(), key=lambda x: abs(0 - x[1]))
+        
+    target_curve=gmm_delay_dta[delay_category][gmm_delay_dta[delay_category+'_class']==target_class]
+    standard_dev=target_curve.std()
+    
+    from scipy.stats import norm
+    delay_thresh=norm.ppf(0.05, loc=mean_dict[target_class], scale=standard_dev)
+
+    
+    return delay_thresh
 

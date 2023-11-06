@@ -52,7 +52,7 @@ rule velocyto_iterations:
     params:
         script='snake_scripts/snake_vel_iterations.py',
         number_of_iterations=5,
-        num_k=550
+        num_k=550 
     output:
         vel_Iterations=directory('data_files/confidence_intervals/{cell_line}/{replicate}/Velocity_iterations')
     log:

@@ -40,6 +40,9 @@ all_figures
 #Ignore big TCGA file
 R_scripts/TCGA_all_dta.rda
 
+#Ignore unecessary R scripts
+R_scripts/not_needed
+
 #Ignore analysis results
 analysis_results
 delay_characterization
