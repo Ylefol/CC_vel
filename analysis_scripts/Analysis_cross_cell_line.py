@@ -21,7 +21,6 @@ cell_lines['jurkat']='A_B_C_D'
 my_func.wrapper_chi_square_overlap(cell_lines)
 
 
-
 """Raincloud plots to observe known cell cycle gene behaviour across all cell lines"""
 
 cell_lines={'HaCat':['A','B'],'293t':['A','B','C','D'],'jurkat':['A','B','C','D']}
@@ -41,9 +40,20 @@ my_cc_dta.to_csv('known_cc_data_expression.csv')
 
 """Identify genes which are significant based on variability thresholds, establish
 the intersect of the relevant cell lines, compare these results with TCGA DEGs"""
-
+#Create and save the variability thresholds
 thresh_var_dict=my_func.identify_cell_line_variability_thresholds(cell_lines)
 
+#Identify genes with significant negative threshold
+HaCat_genes=my_func.get_sig_genes('HaCat','A_B',t_test_based=False,delay_type='dec_to_0',variability_based=False)
+c293t_genes=my_func.get_sig_genes('293t','A_B_C_D',t_test_based=False,delay_type='dec_to_0',variability_based=False)
+jurkat_genes=my_func.get_sig_genes('jurkat','A_B_C_D',t_test_based=False,delay_type='dec_to_0',variability_based=False)
+
+#Remove genes with significant negative delay
+thresh_var_dict['HaCat']=thresh_var_dict['HaCat'][thresh_var_dict['HaCat'].gene_name.isin(HaCat_genes)]
+thresh_var_dict['293t']=thresh_var_dict['293t'][thresh_var_dict['293t'].gene_name.isin(c293t_genes)]
+thresh_var_dict['jurkat']=thresh_var_dict['jurkat'][thresh_var_dict['jurkat'].gene_name.isin(jurkat_genes)]
+
+#Create and save intersect
 set_HaCat=set(list(thresh_var_dict['HaCat'].gene_name[thresh_var_dict['HaCat'].padjusted<0.01]))
 set_293t=set(list(thresh_var_dict['293t'].gene_name[thresh_var_dict['293t'].padjusted<0.01]))
 set_jurkat=set(list(thresh_var_dict['jurkat'].gene_name[thresh_var_dict['jurkat'].padjusted<0.01]))
@@ -66,7 +76,8 @@ The two functions below use Gaussian Mixture Modelling to split the trimodal dis
 of cell line delays. This is performed for all cell lines and all four delay categories.
 The results are then plotted into a single file and saved to the main directory"""
 
-gmm_dictionnary=my_func.create_GMM_dict(cell_line_dictionnary=cell_lines,gmm_n_comp=3,use_sig_genes=True,log10_transform=False)
+gmm_dictionnary=my_func.create_GMM_dict(cell_line_dictionnary=cell_lines,gmm_n_comp=3,
+                                        use_sig_genes=True,log10_transform=False,random_state=123)
 
 my_func.plot_GMM_res_three_cell_lines(gmm_dict=gmm_dictionnary,plot_save_name='non_log10_gmm_results.png')
 
@@ -78,8 +89,8 @@ cell cycle delay (specifically in the decrease to 0 category) that does not go
 below the identified threshold via the gaussian mixture modeling technique."""
 
 my_func.wrapper_chi_square_overlap(cell_line_dict=cell_lines,use_t_sig=True,
-                                   delay_cat='dec_to_0', use_var_sig=True,
-                                   csv_save_name='data_files/data_results/chi_square_t_var_delay_results_kkkk.csv')
+                                   delay_cat='dec_to_0', use_var_sig=False,
+                                   csv_save_name='data_files/data_results/chi_square_t_delay_results.csv')
 
 
 
@@ -94,27 +105,6 @@ for cell_line in cell_lines.keys():
     with open(file_name, 'w') as f:
         for line in retrieved_genes:
             f.write(line+'\n')
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

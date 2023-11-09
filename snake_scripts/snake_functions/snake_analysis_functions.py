@@ -2922,7 +2922,7 @@ def create_TCGA_comparison_stat_results(cell_line_gene_dict,DEG_file_name,univer
     universe=set(universe)
     universe=list(universe)
     
-    comp_res_dict={'Cell_line':[],'Phase':[],'Observed':[],'Expected':[],'pvalue':[]}
+    comp_res_dict={'Cell_line':[],'Phase':[],'Cont_table':[],'Odds_ratio':[],'Observed':[],'Expected':[],'pvalue':[]}
     for cell_line in list(cell_line_gene_dict.keys()):
         for phase in ['G1','S','G2M']:
             #Create subsets
@@ -2949,27 +2949,23 @@ def create_TCGA_comparison_stat_results(cell_line_gene_dict,DEG_file_name,univer
                 
             #Build contingency table and run stat
             cont_table=np.array([[yes_1_yes_2,yes_2_no_1],[yes_1_no_2,no_1_no_2]])
-            print('##########')
-            print(cell_line)
-            print(phase)
-            print(cont_table)
-            print('Odds ratio: ')
-            print((yes_1_yes_2/yes_1_no_2)/(yes_2_no_1/no_1_no_2))
-            comp_res_dict['Cell_line'].append(cell_line)
-            comp_res_dict['Phase'].append(phase)
+
             if cont_table[0][0]==0 and cont_table[0][1]==0:
                 #Cannot do comparison
-                comp_res_dict['Observed'].append('No genes')
-                comp_res_dict['Expected'].append('No genes')
-                comp_res_dict['pvalue'].append('NA')
+                next
             else:
                 res=stats.chi2_contingency(cont_table)
+                comp_res_dict['Cell_line'].append(cell_line)
+                comp_res_dict['Phase'].append(phase)
                 
                 #Build list of results - observed expected pvalue
+                odds_ratio=(yes_1_yes_2/yes_1_no_2)/(yes_2_no_1/no_1_no_2)
                 expected_yes_yes=res[3][0][0]
                 observed_yes_yes=yes_1_yes_2
                 pvalue=res[1]
                 #Add results to dictionnary
+                comp_res_dict['Cont_table'].append(cont_table)
+                comp_res_dict['Odds_ratio'].append(odds_ratio)
                 comp_res_dict['Observed'].append(observed_yes_yes)
                 comp_res_dict['Expected'].append(expected_yes_yes)
                 comp_res_dict['pvalue'].append(pvalue)
@@ -2980,6 +2976,7 @@ def get_sig_genes(cell_line,target_folder,t_test_based=True,delay_type=None,vari
     """
     Basic function which retrieves significant genes based on either a t-test file,
     a variability file, or a delay analysis.
+    NOTE: The random state for GMM is set to 123, as used in the publication.
 
     Parameters
     ----------
@@ -3013,7 +3010,7 @@ def get_sig_genes(cell_line,target_folder,t_test_based=True,delay_type=None,vari
         input_dict[cell_line]=target_folder
         
         #Perform gmm split of delay curves, identify threshold
-        gmm_dictionnary=create_GMM_dict(cell_line_dictionnary=input_dict,gmm_n_comp=3,use_sig_genes=True,log10_transform=False)
+        gmm_dictionnary=create_GMM_dict(cell_line_dictionnary=input_dict,gmm_n_comp=3,use_sig_genes=True,log10_transform=False,random_state=123)
         delay_thresh=identify_delay_threshold(gmm_dictionnary,cell_line,delay_category=delay_type)
         
         #Retrieve genes based on threshold
@@ -3039,7 +3036,7 @@ def get_sig_genes(cell_line,target_folder,t_test_based=True,delay_type=None,vari
 
 from sklearn.mixture import GaussianMixture
 
-def create_GMM_dict(cell_line_dictionnary,gmm_n_comp=3,use_sig_genes=True,log10_transform=False):
+def create_GMM_dict(cell_line_dictionnary,gmm_n_comp=3,use_sig_genes=True,log10_transform=False,random_state=None):
     """
     Function which utilizes gaussian mixture modelling to split a multimodal curve into
     distinct unimodal curves. 
@@ -3060,6 +3057,8 @@ def create_GMM_dict(cell_line_dictionnary,gmm_n_comp=3,use_sig_genes=True,log10_
         To limit the use of genes to significant ones. The default is True.
     log10_transform : boolean, optional
         If the delay values should be log10 transformed. The default is False.
+    random_state : int, optional
+        The seed used for the modeling, can be none (random). The default is None
 
     Returns
     -------
@@ -3087,7 +3086,7 @@ def create_GMM_dict(cell_line_dictionnary,gmm_n_comp=3,use_sig_genes=True,log10_
             delay_df['dec_to_0'] = my_utils.log10_dta(delay_df,'dec_to_0')
             delay_df['dec_to_-1'] = my_utils.log10_dta(delay_df,'dec_to_-1')
 
-        gmm = GaussianMixture(n_components=gmm_n_comp, covariance_type='tied')
+        gmm = GaussianMixture(n_components=gmm_n_comp, covariance_type='tied',random_state=random_state)
 
         delay_types=['inc_to_0','inc_to_+1','dec_to_0','dec_to_-1']
 
@@ -3125,42 +3124,45 @@ def plot_GMM_res_three_cell_lines(gmm_dict,plot_save_name='gmm_res.png'):
     """
     delay_types=['inc_to_0','inc_to_+1','dec_to_0','dec_to_-1']
 
-    f, ax = plt.subplots(nrows=4, ncols=6, figsize=(55, 35))
+    f, ax = plt.subplots(nrows=6, ncols=4, figsize=(35, 40))
     # f.subplots_adjust(top=0.78) 
     for idx_cell,cell_line in enumerate(gmm_dict.keys()):
-        loc_before_GMM=idx_cell*2
-        loc_after_GMM=loc_before_GMM+1
+        # loc_before_GMM=idx_cell*2
+        loc_after_GMM=idx_cell*2
+        # loc_after_GMM=loc_before_GMM+1
+        loc_before_GMM=loc_after_GMM+1
         
         delay_df=gmm_dict[cell_line]
         for idx_d,d_type in enumerate(delay_types):
             
-            sns.kdeplot(data=delay_df[d_type], ax=ax[idx_d,loc_before_GMM],lw=2)
-            ax[idx_d,loc_before_GMM].set_title('Before GMM', fontsize=16)
-            ax[idx_d,loc_before_GMM].set_xlabel(d_type, fontsize = 15)
-            ax[idx_d,loc_before_GMM].set_ylabel('Density', fontsize = 15)
+            sns.kdeplot(data=delay_df[d_type], ax=ax[loc_before_GMM,idx_d],lw=2)
+            ax[loc_before_GMM,idx_d].set_title('Before GMM', fontsize=16)
+            ax[loc_before_GMM,idx_d].set_xlabel(d_type, fontsize = 15)
+            ax[loc_before_GMM,idx_d].set_ylabel('Density', fontsize = 15)
             
-            sns.kdeplot(data=delay_df[delay_df[d_type+'_class']==0][d_type], label='Component 1', ax=ax[idx_d,loc_after_GMM],lw=2)
-            sns.kdeplot(data=delay_df[delay_df[d_type+'_class']==1][d_type], label='Component 2', ax=ax[idx_d,loc_after_GMM],lw=2)
-            sns.kdeplot(data=delay_df[delay_df[d_type+'_class']==2][d_type], label='Component 3', ax=ax[idx_d,loc_after_GMM],lw=2)
+            sns.kdeplot(data=delay_df[delay_df[d_type+'_class']==0][d_type], label='Component 1', ax=ax[loc_after_GMM,idx_d],lw=2)
+            sns.kdeplot(data=delay_df[delay_df[d_type+'_class']==1][d_type], label='Component 2', ax=ax[loc_after_GMM,idx_d],lw=2)
+            sns.kdeplot(data=delay_df[delay_df[d_type+'_class']==2][d_type], label='Component 3', ax=ax[loc_after_GMM,idx_d],lw=2)
             
             
             
-            ax[idx_d,loc_after_GMM].set_title('After GMM', fontsize=16)
-            ax[idx_d,loc_after_GMM].set_xlabel(d_type, fontsize = 15)
-            ax[idx_d,loc_after_GMM].set_ylabel('Density', fontsize = 15)
+            ax[loc_after_GMM,idx_d].set_title('After GMM', fontsize=16)
+            ax[loc_after_GMM,idx_d].set_xlabel(d_type, fontsize = 15)
+            ax[loc_after_GMM,idx_d].set_ylabel('Density', fontsize = 15)
             
             #Identify top-left coordinates for text overlay
             delay_thresh=identify_delay_threshold(gmm_dict,cell_line,d_type)
             custom_text='delay threshold:\n'+str(delay_thresh.round(2))
-            ax[idx_d,loc_after_GMM].text(0.6, 0.9, custom_text, ha='left', va='top', 
-                                         transform=ax[idx_d,loc_after_GMM].transAxes,size=20)
+            ax[loc_after_GMM,idx_d].text(0.6, 0.9, custom_text, ha='left', va='top', 
+                                         transform=ax[loc_after_GMM,idx_d].transAxes,size=20)
     
-    #Separate the three cell lines with vertical lines
-    line = plt.Line2D((0.3725, 0.3725),[0.1,0.9], transform=f.transFigure, color="black",linewidth=5)
+    #Separate the three cell lines with horizontal lines
+    line = plt.Line2D([0.1, 0.9],[0.628,0.628], transform=f.transFigure, color="black",linewidth=2)
     f.add_artist(line)
-    line = plt.Line2D((0.638, 0.638),[0.1,0.9], transform=f.transFigure, color="black",linewidth=5)
+    line = plt.Line2D([0.1, 0.9],[0.37,0.37], transform=f.transFigure, color="black",linewidth=2)
     f.add_artist(line)
     
+    # line = plt.Line2D([0,1],[y,y], transform=fig.transFigure, color="black")
     
     #Add cell line titles
     # plt.figtext(0.245,0.90,list(gmm_dict.keys())[0], va="center", ha="center", size=50)
@@ -3168,15 +3170,15 @@ def plot_GMM_res_three_cell_lines(gmm_dict,plot_save_name='gmm_res.png'):
     # plt.figtext(0.78,0.90,list(gmm_dict.keys())[2], va="center", ha="center", size=50)
     
     #Custom titles ofr formatting
-    plt.figtext(0.245,0.90,'HaCaT', va="center", ha="center", size=50)
-    plt.figtext(0.515,0.90,'Jurkat', va="center", ha="center", size=50)
-    plt.figtext(0.78,0.90,'293T', va="center", ha="center", size=50)
+    plt.figtext(0.095,0.25,'HaCaT', va="center", ha="center", size=30,rotation=90)
+    plt.figtext(0.095,0.50,'Jurkat', va="center", ha="center", size=30,rotation=90)
+    plt.figtext(0.095,0.75,'293T', va="center", ha="center", size=30,rotation=90)
     
     #Add delay category titles
-    plt.figtext(0.095,0.80,delay_types[0], va="center", ha="center", size=50,rotation=90)
-    plt.figtext(0.095,0.60,delay_types[1], va="center", ha="center", size=50,rotation=90)
-    plt.figtext(0.095,0.40,delay_types[2], va="center", ha="center", size=50,rotation=90)
-    plt.figtext(0.095,0.20,delay_types[3], va="center", ha="center", size=50,rotation=90)
+    plt.figtext(0.21,0.90,delay_types[0], va="center", ha="center", size=30)
+    plt.figtext(0.41,0.90,delay_types[1], va="center", ha="center", size=30)
+    plt.figtext(0.61,0.90,delay_types[2], va="center", ha="center", size=30)
+    plt.figtext(0.81,0.90,delay_types[3], va="center", ha="center", size=30)
         
     
     plt.savefig(plot_save_name, bbox_inches='tight')
