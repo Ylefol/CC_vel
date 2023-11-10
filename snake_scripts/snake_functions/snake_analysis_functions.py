@@ -2471,6 +2471,65 @@ def identify_cell_line_variability_thresholds(cell_dict,REAC_path='data_files/RE
     return var_thresh_dict
 
 
+def create_gene_status_excel(cell_line_dict):
+    """
+    Wrapper function to create gene status excel file - supplementary file 1 in the manuscript
+
+    Parameters
+    ----------
+    cell_line_dict : dictionnary
+        Dictionnary containing the cell line names as keys and the target folders as values.
+
+    Returns
+    -------
+    None.
+
+    """
+    cell_var_dict=create_cell_line_variance_dictionnary(cell_line_dict)
+    gmm_dictionnary=create_GMM_dict(cell_line_dictionnary=cell_line_dict,gmm_n_comp=3,
+                                            use_sig_genes=False,log10_transform=False,random_state=123)
+    
+    REAC_path='data_files/REAC_pathways/'
+    
+    custom_column_order=['gene_name','status','t','pvalue','padjusted','log10Var','dec_to_0','phase_peak_vel','phase_peak_exp','phase_start_vel']
+    
+    
+    
+    from openpyxl import Workbook
+    workbook = Workbook()
+    workbook.save("gene_status.xlsx")
+    for cell_line in cell_line_dict.keys():
+        
+        #Load and format necessary files
+        t_res=pd.read_csv('data_files/data_results/rank/'+cell_line+'/'+cell_line_dict[cell_line]+'_t_test_results.csv')
+        delay_df=pd.read_csv('data_files/data_results/delay_genes/'+cell_line+'/'+cell_line_dict[cell_line]+'_delay_genes.csv')
+        delay_df=delay_df[['gene_name','dec_to_0']]
+        var_series=cell_var_dict[cell_line]
+        
+        #Obtain thresholds
+        delay_thresh=identify_delay_threshold(gmm_dictionnary,cell_line,'dec_to_0')
+        var_thresh=find_variability_threshold(cell_var_dict[cell_line],REAC_path)
+        
+        #Create merged file
+        merged_res=t_res.merge(delay_df,on='gene_name')
+        merged_res=merged_res.assign(log10Var=var_series[t_res.gene_name].values)
+        
+        
+        #Create 'status' column and fill as needed
+        merged_res=merged_res.assign(status=None)
+        merged_res.loc[merged_res['t'] >0, 'status'] = 'Rank-able'
+        merged_res.loc[(merged_res['t'] >0) & (merged_res['padjusted']<0.01), 'status'] = 'Significant padj (t-test)'
+        merged_res.loc[(merged_res['t'] >0) & (merged_res['padjusted']<0.01) & (merged_res['dec_to_0']>=delay_thresh), 'status'] = 'Significant padj (t-test) and delay'
+        merged_res.loc[(merged_res['t'] >0) & (merged_res['padjusted']<0.01) & (merged_res['dec_to_0']>=delay_thresh) & (merged_res['log10Var']>var_thresh), 'status'] = 'Significant padj (t-test) and delay and variability'
+        
+        
+        merged_res=merged_res[custom_column_order]
+        
+        
+        with pd.ExcelWriter("gene_status.xlsx", mode="a", engine="openpyxl") as writer:
+            merged_res.to_excel(writer, sheet_name=cell_line,index=False)
+        
+
 
 #%% statistical analysis functions
 
@@ -3010,7 +3069,7 @@ def get_sig_genes(cell_line,target_folder,t_test_based=True,delay_type=None,vari
         input_dict[cell_line]=target_folder
         
         #Perform gmm split of delay curves, identify threshold
-        gmm_dictionnary=create_GMM_dict(cell_line_dictionnary=input_dict,gmm_n_comp=3,use_sig_genes=True,log10_transform=False,random_state=123)
+        gmm_dictionnary=create_GMM_dict(cell_line_dictionnary=input_dict,gmm_n_comp=3,use_sig_genes=t_test_based,log10_transform=False,random_state=123)
         delay_thresh=identify_delay_threshold(gmm_dictionnary,cell_line,delay_category=delay_type)
         
         #Retrieve genes based on threshold

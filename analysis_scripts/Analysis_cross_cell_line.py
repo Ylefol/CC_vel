@@ -111,3 +111,9 @@ for cell_line in cell_lines.keys():
 
 
 
+"""Create an excel file for gene status, equivalent to supplementary file 1 in
+the manuscript"""
+my_func.create_gene_status_excel(cell_lines)
+
+
+
