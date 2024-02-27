@@ -8,7 +8,7 @@ Created on Mon Feb 27 10:08:10 2023
 
 ############## 3'UTR analysis and comparison with significant delays
 #Import required functions
-from snake_scripts.snake_functions import snake_analysis_functions as my_func
+from snake_scripts.snake_functions import snake_analysis_miRNA_functions as my_func
 
 #Import libraries
 import pandas as pd

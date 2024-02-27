@@ -49,3 +49,6 @@ delay_characterization
 
 #Ignore cython folder
 snake_scripts/snake_functions/__pycache__
+
+#Ignore some extra results
+miR_box

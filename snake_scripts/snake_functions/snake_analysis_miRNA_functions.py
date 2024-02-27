@@ -60,7 +60,6 @@ def find_three_UTR_lengths(gtf_path,gene_list,output_path=None,get_df=True):
     """
     #Read the gtf file using pyranges
     gr=pr.read_gtf(gtf_path)
-    
     #Manueally establish columns of iportance
     col_list=['gene_name','transcript_name','transcript_id','Source','Feature','Chromosome','Strand','Start','End','Length']
     my_dict={}
@@ -156,6 +155,15 @@ def create_read_UTR_results(cell_line,target_rep,gtf_path,gene_list):
     
     return UTR_df
 
+
+def extract_miRNA_num(input_list):
+    miR_list=[]
+    for miR in input_list:
+        # print(miR)
+        miR_list=miR_list+miR.split('/')
+
+    miR_list = [i for a,i in enumerate(miR_list) if i!='']
+    return(miR_list)
 
 #%% Target scan functions
 
@@ -361,26 +369,39 @@ def create_miRweight_boxplot(vari_df, weight_dict, target_key, cell_line,plot_na
     None.
 
     """
-    new_dict={}
-    new_dict['genes']=vari_df['gene_names']
-    new_dict['miR_weights']=weight_dict[target_key]
-    new_dict['variance']=list(vari_df[target_key])
-    extracted_df=pd.DataFrame(dict([ (k,pd.Series(v)) for k,v in new_dict.items() ]))
-    extracted_df = extracted_df.sort_values(by=['miR_weights'], ascending=False)
+    new_df=vari_df.copy()
+    new_df['genes']=vari_df['gene_names']
+    # new_df['miRNAs']=vari_df['miRNAs']
+    new_df['miR_weights']=vari_df['weight']
+    new_df['variance']=vari_df[target_key]
+    
+    new_df.drop(columns=['gene_names','weight','variance'])
+    # new_dict={}
+    # new_dict['genes']=vari_df['gene_names']
+    # new_dict['miRNAs']=vari_df['miRNAs']
+    # new_dict['miR_weights']=vari_df['weight']
+    # new_dict['variance']=list(vari_df[target_key])
+    # extracted_df=pd.DataFrame(dict([ (k,pd.Series(v)) for k,v in new_dict.items() ]))
+    extracted_df = new_df.sort_values(by=['miR_weights'], ascending=False)
 
     
     #Apply the cutoff if necessary
     if delay_cutoff:
         extracted_df=extracted_df[abs(extracted_df.variance)<=delay_cutoff]
     #Find number of genes in each groups
-    G1_num=len(np.where(np.asarray(extracted_df['miR_weights'])==0)[0])
-    G2_num=len(np.where(np.asarray(extracted_df['miR_weights'])>=-0.3)[0])-len(np.where(np.asarray(extracted_df['miR_weights'])==0)[0])
-    G3_num=len(np.where(np.asarray(extracted_df['miR_weights'])<-0.3)[0])
+    sub_df_1=extracted_df[(extracted_df['miR_weights'] == 0)]
+    G1_num=str(len(extract_miRNA_num(sub_df_1['miRNAs'])))+' | '+str(len(set(extract_miRNA_num(sub_df_1['miRNAs']))))
+    
+    sub_df_2=extracted_df[(extracted_df['miR_weights'] < 0) & (extracted_df['miR_weights'] >= -0.3)]
+    G2_num=str(len(extract_miRNA_num(sub_df_2['miRNAs'])))+' | '+str(len(set(extract_miRNA_num(sub_df_2['miRNAs']))))
+    
+    sub_df_3=extracted_df[(extracted_df['miR_weights'] < -0.3)]
+    G3_num=str(len(extract_miRNA_num(sub_df_3['miRNAs'])))+' | '+str(len(set(extract_miRNA_num(sub_df_3['miRNAs']))))
 
     # Convert results to log10
-    sub_list_1=np.log10(list(extracted_df.variance[extracted_df.miR_weights==0]))
+    sub_list_3=np.log10(list(extracted_df.variance[extracted_df.miR_weights==0]))
     sub_list_2=np.log10(list(extracted_df.variance[(extracted_df.miR_weights<0) & (extracted_df.miR_weights>=-0.3)]))
-    sub_list_3=np.log10(list(extracted_df.variance[extracted_df.miR_weights<-0.3]))
+    sub_list_1=np.log10(list(extracted_df.variance[extracted_df.miR_weights<-0.3]))
 
     # Calculate and format the pvalue from the ttest between each category
     pval_g1_g2="{0:.1e}".format(stats.ttest_ind(sub_list_1,sub_list_2)[1])
@@ -395,7 +416,9 @@ def create_miRweight_boxplot(vari_df, weight_dict, target_key, cell_line,plot_na
     ax.set_aspect(0.17)
     bp = ax.boxplot(data_list)
     # bp["medians"][0][0][1]=3
-    plt.xticks([1, 2, 3], ['0\n('+str(G1_num)+')', '>= -0.3\n('+str(G2_num)+')', '< -0.3\n('+str(G3_num)+')'],size=15)
+    X_axis_labels=['0\n('+str(G1_num)+')', '>= -0.3\n('+str(G2_num)+')', '< -0.3\n('+str(G3_num)+')']
+    X_axis_labels.reverse()
+    plt.xticks([1, 2, 3],X_axis_labels ,size=15)
     plt.yticks(size=15)
     # plt.ylim(0,0.5)
     
@@ -455,7 +478,7 @@ def create_miRweight_boxplot(vari_df, weight_dict, target_key, cell_line,plot_na
         os.makedirs(plot_path, exist_ok=True)
     ax.set_ylabel('log10(variance ratio)',size=20)
     ax.set_xlabel('miRNA weight category',size=20)
-    ax.set_title(('Boxplot for '+target_key+' cells'),size=25)
+    ax.set_title(('Boxplot for '+target_key+' cells | '+miR_thresh),size=25)
     # plot_path="all_figures",cell_line
     # plt.savefig(os.path.join(plot_path,name),bbox_inches='tight')
     plt.savefig((plot_path+'/'+plot_name+'.png'),bbox_inches='tight')
@@ -463,6 +486,53 @@ def create_miRweight_boxplot(vari_df, weight_dict, target_key, cell_line,plot_na
     plt.close("all")
     # plt.show()
     gc.collect()
+
+
+def expression_bar_plot(miR_dta_dict,miR_thresh,layer,plot_path):
+    fig = plt.figure(figsize =(7, 4),dpi=900) 
+    ax  = fig.add_subplot(111)
+    # ax.set_aspect(0.17)
+    X_groups=list(miR_dta_dict[miR_thresh]['spliced'].keys())
+    X_groups.reverse()
+    X_group_adjust=[]
+    
+    if layer=='spliced':
+        color='#542788'
+    else:
+        color='#b35806'
+        
+    
+    width=0.2
+    X_axis = np.arange(len(X_groups)) 
+    val_dict={}
+    val_dict['mean']=[]
+    val_dict['std']=[]
+    for miR_weight in X_groups:
+        val_dict['mean'].append(miR_dta_dict[miR_thresh][layer][miR_weight].mean().mean())
+        val_dict['std'].append(miR_dta_dict[miR_thresh][layer][miR_weight].std().mean())
+
+    val_dict['mean']=tuple(val_dict['mean']) 
+    val_dict['std']=tuple(val_dict['std']) 
+
+    multiplier=0
+    for weight,vals in val_dict.items():
+        offset = width * multiplier
+        rects = ax.bar(X_axis + offset, vals, width, color=color)
+        ax.bar_label(rects, padding=-11,color='white',fmt='%.2f')
+        multiplier += 1
+
+
+    for val in X_groups:
+        X_group_adjust.append(val+'\n ('+str(len(miR_dta_dict[miR_thresh][layer][val].columns))+')')
+        
+    ax.set_xticks(X_axis + width, X_group_adjust)
+    # plt.xticks(X_axis, X_group_adjust) 
+    plt.xlabel("miRNA weight category") 
+    plt.ylabel("mean of mean expression") 
+    plt.title("Expression for "+layer+" genes, All cells | "+miR_thresh)
+    plot_path=plot_path+'/'+miR_thresh
+    plt.savefig(plot_path+'/'+layer+'_All.png')
+    plt.close()
 
 #%% Wrapper functions for analysis
 
@@ -547,7 +617,7 @@ def wrapper_miRNA_boxplot_analysis(cell_line,replicates,layers,target_folder,var
         #Remove genes in necessary
         if len(gene_exclusion_list) != 0:
             gene_removal_values=variance_df.gene_names.isin(gene_exclusion_list).value_counts()
-            for my_bool, cnts in gene_removal_values.iteritems():
+            for my_bool, cnts in gene_removal_values.items():
                 if my_bool==True:
                     text_res=text_res+"Removing "+str(cnts)+" genes using the provided exclusion list"
             good_idx=list(np.where(~variance_df["gene_names"].isin(gene_exclusion_list)==True)[0])
