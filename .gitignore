@@ -11,9 +11,19 @@ data_files/initial_data/*
 
 #Ignore for now, will release on publication
 !data_files/initial_data/loom_files
-data_files/initial_data/loom_files/*
-!data_files/initial_data/loom_files/HaCat_A.loom
-!data_files/initial_data/loom_files/HaCat_B.loom
+
+data_files/initial_data/loom_files/293t_B.loom
+data_files/initial_data/loom_files/293t_C.loom
+data_files/initial_data/loom_files/293t_D.loom
+data_files/initial_data/loom_files/jurkat_A.loom
+data_files/initial_data/loom_files/jurkat_B.loom
+data_files/initial_data/loom_files/jurkat_C.loom
+data_files/initial_data/loom_files/jurkat_D.loom
+
+data_files/initial_data/loom_files/HeLa_A.loom
+data_files/initial_data/loom_files/HeLa_B.loom
+
+data_files/initial_data/loom_files/HeLaKO_A.loom
 
 !data_files/initial_data/barcodes
 data_files/initial_data/barcodes/*
@@ -49,3 +59,6 @@ delay_characterization
 
 #Ignore cython folder
 snake_scripts/snake_functions/__pycache__
+
+#Ignore miR box results
+miR_box
