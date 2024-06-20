@@ -404,9 +404,24 @@ def create_miRweight_boxplot(vari_df, weight_dict, target_key, cell_line,plot_na
     sub_list_1=np.log10(list(extracted_df.variance[extracted_df.miR_weights<-0.3]))
 
     # Calculate and format the pvalue from the ttest between each category
-    pval_g1_g2="{0:.1e}".format(stats.ttest_ind(sub_list_1,sub_list_2)[1])
-    pval_g2_g3="{0:.1e}".format(stats.ttest_ind(sub_list_2,sub_list_3)[1])
-    pval_g1_g3="{0:.1e}".format(stats.ttest_ind(sub_list_1,sub_list_3)[1])
+    pval_g1_g2=stats.ttest_ind_from_stats(sub_list_1.mean(), sub_list_1.std(), len(sub_list_1),
+                                          sub_list_2.mean(), sub_list_2.std(), len(sub_list_2),
+                                          False)[1]
+    pval_g1_g2="{0:.1e}".format(pval_g1_g2)
+    
+    pval_g2_g3=stats.ttest_ind_from_stats(sub_list_2.mean(), sub_list_2.std(), len(sub_list_2),
+                                          sub_list_3.mean(), sub_list_3.std(), len(sub_list_3),
+                                          False)[1]
+    pval_g2_g3="{0:.1e}".format(pval_g2_g3)
+    
+    pval_g1_g3=stats.ttest_ind_from_stats(sub_list_1.mean(), sub_list_1.std(), len(sub_list_1),
+                                          sub_list_3.mean(), sub_list_3.std(), len(sub_list_3),
+                                          False)[1]
+    pval_g1_g3="{0:.1e}".format(pval_g1_g3)
+    
+    # pval_g1_g2="{0:.1e}".format(stats.ttest_ind(sub_list_1,sub_list_2)[1])
+    # pval_g2_g3="{0:.1e}".format(stats.ttest_ind(sub_list_2,sub_list_3)[1])
+    # pval_g1_g3="{0:.1e}".format(stats.ttest_ind(sub_list_1,sub_list_3)[1])
 
     # Create list of results
     data_list=[sub_list_1,sub_list_2,sub_list_3]
@@ -500,37 +515,104 @@ def expression_bar_plot(miR_dta_dict,miR_thresh,layer,plot_path):
         color='#542788'
     else:
         color='#b35806'
-        
+    
+
     
     width=0.2
     X_axis = np.arange(len(X_groups)) 
-    val_dict={}
-    val_dict['mean']=[]
-    val_dict['std']=[]
-    for miR_weight in X_groups:
-        val_dict['mean'].append(miR_dta_dict[miR_thresh][layer][miR_weight].mean().mean())
-        val_dict['std'].append(miR_dta_dict[miR_thresh][layer][miR_weight].std().mean())
-
-    val_dict['mean']=tuple(val_dict['mean']) 
-    val_dict['std']=tuple(val_dict['std']) 
-
-    multiplier=0
-    for weight,vals in val_dict.items():
-        offset = width * multiplier
-        rects = ax.bar(X_axis + offset, vals, width, color=color)
-        ax.bar_label(rects, padding=-11,color='white',fmt='%.2f')
-        multiplier += 1
+    mean_list=[]
+    std_list=[]
+    extracted_vals_dict={}
+    for idx,miR_weight in enumerate(X_groups):
+        extracted_vals=miR_dta_dict[miR_thresh][layer][miR_weight]
+        log_vals=np.log2(extracted_vals+1)
+        log_vals=log_vals.replace(-np.Inf, np.nan)
+        # log_vals=abs(log_vals)
+        mean_list.append(log_vals.mean().mean())
+        std_list.append(log_vals.mean().std())
+        extracted_vals_dict[idx]=log_vals.mean()
+    #Set some parameters
+    std_temp=std_list
+    up_bool=False
+    down_bool=True
+    print(down_bool)
+    #Plot transparent bar to make labeling easier
+    transparent_res = [x + y for x, y in zip(mean_list, std_temp)]
+    rects2 = ax.bar(X_axis, transparent_res, width, color='w',alpha=1)
+    
+    #Plot actual color bar
+    rects1 = ax.bar(X_axis, mean_list, width, color=color)
+    
+    #Plot error bars and adjust caps
+    plotline1, caplines1, barlinecols1 = ax.errorbar(X_axis, mean_list, yerr=std_list,uplims=up_bool, lolims=down_bool,capsize = 0, ls='None', color='k')
+    caplines1[0].set_marker('_')
+    caplines1[0].set_markersize(20)
+    
+    #Add labeling on transparent bar
+    ax.bar_label(rects2,labels=[f'{v:.2f} ± {e:.2f}' for v,e in zip(mean_list, std_list)], padding=2, fontsize=8, label_type='edge')
+    
+    
+    #Pvalue bars - use stdtemp for location
+    g1_g2=max(transparent_res[0:2])+(max(transparent_res[0:2])*0.1)
+    g2_g3=max(transparent_res[1:3])+(max(transparent_res[1:3])*0.1)
+    g1_g3=max(transparent_res)+(max(transparent_res)*0.2)
+    txt_location='bottom'
+    ymax=g1_g3+(g1_g3*0.1)
+    ymin=0
+    
+    # print(len(extracted_vals_dict[0].index))
+    pval_g1_g2=stats.ttest_ind_from_stats(extracted_vals_dict[0].mean(), extracted_vals_dict[0].std(), len(extracted_vals_dict[0].index),
+                                          extracted_vals_dict[1].mean(), extracted_vals_dict[1].std(), len(extracted_vals_dict[1].index),
+                                          False)[1]
+    pval_g1_g2="{0:.1e}".format(pval_g1_g2)
+    
+    pval_g2_g3=stats.ttest_ind_from_stats(extracted_vals_dict[1].mean(), extracted_vals_dict[1].std(), len(extracted_vals_dict[1].index),
+                                          extracted_vals_dict[2].mean(), extracted_vals_dict[2].std(), len(extracted_vals_dict[2].index),
+                                          False)[1]
+    pval_g2_g3="{0:.1e}".format(pval_g2_g3)
+    
+    pval_g1_g3=stats.ttest_ind_from_stats(extracted_vals_dict[0].mean(), extracted_vals_dict[0].std(), len(extracted_vals_dict[0].index),
+                                          extracted_vals_dict[2].mean(), extracted_vals_dict[2].std(), len(extracted_vals_dict[2].index),
+                                          False)[1]
+    pval_g1_g3="{0:.1e}".format(pval_g1_g3)
+    
+    plt.hlines(g1_g2,0,1,colors='black')
+    mid_x=(0+1)/2
+    plt.text(mid_x,g1_g2*1.01,s=pval_g1_g2,va=txt_location,ha='center')
+    
+    plt.hlines(g2_g3,1,2,colors='black')
+    mid_x=(1+2)/2
+    plt.text(mid_x,g2_g3*1.01,s=pval_g2_g3,va=txt_location,ha='center')
+    
+    plt.hlines(g1_g3,0,2,colors='black')
+    mid_x=(0+2)/2
+    plt.text(mid_x,g1_g3*1.01,s=pval_g1_g3,va=txt_location,ha='center')
+    # rects1 = ax.bar(X_axis, mean_list, width, color='r',yerr=[np.zeros(len(std_list)),std_list],capsize = 5)
+    # ax.bar(X_axis,mean_list,width ,color=color)
+    # plt.axvline(X_axis[0],ymin=0,ymax=std_list[0],color='red')
+    # plt.ylim(0,max(std_list)+(max(std_list)*0.20))
+    # plt.errorbar(X_axis, mean_list, yerr=std_list, fmt="o", color="r")
+    # for weight,vals in val_dict.items():
+    #     if multiplier==0:
+    #         str_add_on='exp'
+    #     else:
+    #         str_add_on='std'
+    #     offset = width * multiplier
+    #     rects = ax.bar(X_axis + offset, vals, width, color=color)
+    #     ax.bar_label(rects, padding=-22,color='white',fmt='%.2f\n'+str_add_on)
+    #     multiplier += 1
 
 
     for val in X_groups:
         X_group_adjust.append(val+'\n ('+str(len(miR_dta_dict[miR_thresh][layer][val].columns))+')')
-        
-    ax.set_xticks(X_axis + width, X_group_adjust)
+    plt.ylim(ymin,ymax)
+    ax.set_xticks(X_axis, X_group_adjust)
     # plt.xticks(X_axis, X_group_adjust) 
     plt.xlabel("miRNA weight category") 
-    plt.ylabel("mean of mean expression") 
+    plt.ylabel("mean of mean log2(expression +1)") 
     plt.title("Expression for "+layer+" genes, All cells | "+miR_thresh)
     plot_path=plot_path+'/'+miR_thresh
+    # plt.show()
     plt.savefig(plot_path+'/'+layer+'_All.png')
     plt.close()
 

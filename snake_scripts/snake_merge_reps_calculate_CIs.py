@@ -75,6 +75,8 @@ for layer in layers:
     bool_df.to_csv(path_to_results+'/'+layer+"/bool.csv",index=False)
     
     #Create the delay dataframes
+    import warnings
+    warnings.simplefilter(action='ignore', category=FutureWarning)
     val_df=pd.DataFrame.from_dict(vel_up_CI)
     for gene in val_df.columns:
         #Finds positive and negative values before setting all to zero

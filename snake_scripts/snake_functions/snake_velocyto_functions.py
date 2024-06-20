@@ -21,6 +21,7 @@ import numpy as np
 import pandas as pd
 import math
 import os
+import logging
 
 import pickle
 
@@ -29,6 +30,228 @@ import matplotlib.pyplot as plt
 
 import rpy2.robjects as robj
 from rpy2.robjects.packages import importr
+
+#%%Adjusted velocyto functions
+
+def estimate_transition_prob_mod(vlm, hidim: str="Sx_sz", embed: str="ts", transform: str="sqrt",
+                             ndims: int=None, n_sight: int=None, psc: float=None,
+                             knn_random: bool=True, sampled_fraction: float=0.3,
+                             sampling_probs=(0.5, 0.1), max_dist_embed: float=None,
+                             n_jobs: int=4, threads: int=None, calculate_randomized: bool=True,
+                             random_seed: int=15071990, **kwargs) -> None:
+    """Use correlation to estimate transition probabilities for every cells to its embedding neighborhood
+    
+    Arguments
+    ---------
+    hidim: str, default="Sx_sz"
+        The name of the attribute containing the high dimensional space. It will be retrieved as getattr(self, hidim)
+        The updated vector at time t is assumed to be getattr(self, hidim + "_t")
+        Appending .T to the string will transpose the matrix (useful in case we want to use S or Sx)
+    embed: str, default="ts"
+        The name of the attribute containing the embedding. It will be retrieved as getattr(self, embed)
+    transform: str, default="sqrt"
+        The transformation that is applies on the high dimensional space.
+        If None the raw data will be used
+    ndims: int, default=None
+        The number of dimensions of the high dimensional space to work with. If None all will be considered
+        It makes sense only when using principal components
+    n_sight: int, default=None (also n_neighbors)
+        The number of neighbors to take into account when performing the projection
+    psc: float, default=None
+        pseudocount added in variance normalizing transform
+        If None, 1 would be used for log, 0 otherwise
+    knn_random: bool, default=True
+        whether to random sample the neighborhoods to speedup calculation
+    sampling_probs: Tuple, default=(0.5, 1)
+    max_dist_embed: float, default=None
+        CURRENTLY NOT USED
+        The maximum distance allowed
+        If None it will be set to 0.25 * average_distance_two_points_taken_at_random
+    n_jobs: int, default=4
+        number of jobs to calculate knn
+        this only applies to the knn search, for the more time consuming correlation computation see threads
+    threads: int, default=None
+        The threads will be used for the actual correlation computation by default half of the total.
+    calculate_randomized: bool, default=True
+        Calculate the transition probabilities with randomized residuals.
+        This can be plotted downstream as a negative control and can be used to adjust the visualization scale of the velocity field.
+    random_seed: int, default=15071990
+        Random seed to make knn_random mode reproducible
+    
+    Returns
+    -------
+    """
+    from velocyto.estimation import colDeltaCor, colDeltaCorSqrt, colDeltaCorLog10, colDeltaCorpartial, colDeltaCorSqrtpartial, colDeltaCorLog10partial
+    from sklearn.neighbors import NearestNeighbors
+    vcy.analysis.numba_random_seed(random_seed)
+    vlm.which_hidim = hidim
+
+    if "n_neighbors" in kwargs:
+        n_neighbors = kwargs.pop("n_neighbors")
+        if len(kwargs) > 0:
+            logging.warning(f"keyword arguments were passed but could not be interpreted {kwargs}")
+    else:
+        n_neighbors = None
+
+    if n_sight is None and n_neighbors is None:
+        n_neighbors = int(vlm.S.shape[1] / 5)
+
+    if (n_sight is not None) and (n_neighbors is not None) and n_neighbors != n_sight:
+        raise ValueError("n_sight and n_neighbors are different names for the same parameter, they cannot be set differently")
+
+    if n_sight is not None and n_neighbors is None:
+        n_neighbors = n_sight
+
+    if psc is None:
+        if transform == "log" or transform == "logratio":
+            psc = 1.
+        elif transform == "sqrt":
+            psc = 1e-10  # for numerical stablity
+        else:  # transform == "linear":
+            psc = 0
+
+    if knn_random:
+        np.random.seed(random_seed)
+        vlm.corr_calc = "knn_random"
+        if "pcs" in hidim:  # sic
+            hi_dim = np.array(getattr(vlm, hidim).T[:, :ndims], order="C")
+            hi_dim_t = np.array(getattr(vlm, hidim + "_t").T[:, :ndims], order="C")
+        else:
+            if ndims is not None:
+                raise ValueError(f"ndims was set to {ndims} but hidim != 'pcs'. Set ndims = None for hidim='{hidim}'")
+            hi_dim = getattr(vlm, hidim)  # [:, :ndims]
+            hi_dim_t = hi_dim + vlm.used_delta_t * vlm.delta_S  # [:, :ndims] [:, :ndims]
+            if calculate_randomized:
+                vlm.delta_S_rndm = np.copy(vlm.delta_S)
+                vcy.analysis.permute_rows_nsign(vlm.delta_S_rndm)
+                hi_dim_t_rndm = hi_dim + vlm.used_delta_t * vlm.delta_S_rndm
+            
+        embedding = getattr(vlm, embed)
+        vlm.embedding = embedding
+        logging.debug("Calculate KNN in the embedding space")
+        nn = NearestNeighbors(n_neighbors=n_neighbors + 1, n_jobs=n_jobs)
+        nn.fit(embedding)  # NOTE should support knn in high dimensions
+        vlm.embedding_knn = nn.kneighbors_graph(mode="connectivity")
+
+        # Pick random neighbours and prune the rest
+        neigh_ixs = vlm.embedding_knn.indices.reshape((-1, n_neighbors + 1))
+        p = np.linspace(sampling_probs[0], sampling_probs[1], neigh_ixs.shape[1])
+        p = p / p.sum()
+
+        # There was a problem of API consistency because the random.choice can pick the diagonal value (or not)
+        # resulting self.corrcoeff with different number of nonzero entry per row.
+        # Not updated yet not to break previous analyses
+        # Fix is substituting below `neigh_ixs.shape[1]` with `np.arange(1,neigh_ixs.shape[1]-1)`
+        # I change it here since I am doing some breaking changes
+        sampling_ixs = np.stack(list((np.random.choice(neigh_ixs.shape[1],
+                                                  size=(int(sampled_fraction * (n_neighbors + 1)),),
+                                                  replace=False,
+                                                  p=p) for i in range(neigh_ixs.shape[0]))),axis= 0)
+        vlm.sampling_ixs = sampling_ixs
+        neigh_ixs = neigh_ixs[np.arange(neigh_ixs.shape[0])[:, None], sampling_ixs]
+        nonzero = neigh_ixs.shape[0] * neigh_ixs.shape[1]
+        vlm.embedding_knn = vcy.analysis.sparse.csr_matrix((np.ones(nonzero),
+                                                neigh_ixs.ravel(),
+                                                np.arange(0, nonzero + 1, neigh_ixs.shape[1])),
+                                               shape=(neigh_ixs.shape[0],
+                                                      neigh_ixs.shape[0]))
+
+        logging.debug(f"Correlation Calculation '{vlm.corr_calc}'")
+        if transform == "log":
+            delta_hi_dim = hi_dim_t - hi_dim
+            vlm.corrcoef = colDeltaCorLog10partial(hi_dim, np.log10(np.abs(delta_hi_dim) + psc) * np.sign(delta_hi_dim), neigh_ixs, threads=threads, psc=psc)
+            if calculate_randomized:
+                logging.debug(f"Correlation Calculation for negative control")
+                delta_hi_dim_rndm = hi_dim_t_rndm - hi_dim
+                vlm.corrcoef_random = colDeltaCorLog10partial(hi_dim, np.log10(np.abs(delta_hi_dim_rndm) + psc) * np.sign(delta_hi_dim_rndm), neigh_ixs, threads=threads, psc=psc)
+        elif transform == "logratio":
+            log2hidim = np.log2(hi_dim + psc)
+            delta_hi_dim = np.log2(np.abs(hi_dim_t) + psc) - log2hidim
+            vlm.corrcoef = colDeltaCorpartial(log2hidim, delta_hi_dim, neigh_ixs, threads=threads)
+            if calculate_randomized:
+                logging.debug(f"Correlation Calculation for negative control")
+                delta_hi_dim_rndm = np.log2(np.abs(hi_dim_t_rndm) + psc) - log2hidim
+                vlm.corrcoef_random = colDeltaCorpartial(log2hidim, delta_hi_dim_rndm, neigh_ixs, threads=threads)
+        elif transform == "linear":
+            vlm.corrcoef = colDeltaCorpartial(hi_dim, hi_dim_t - hi_dim, neigh_ixs, threads=threads)
+            if calculate_randomized:
+                logging.debug(f"Correlation Calculation for negative control")
+                vlm.corrcoef_random = colDeltaCorpartial(hi_dim, hi_dim_t_rndm - hi_dim, neigh_ixs, threads=threads)
+        elif transform == "sqrt":
+            delta_hi_dim = hi_dim_t - hi_dim
+            vlm.corrcoef = colDeltaCorSqrtpartial(hi_dim, np.sqrt(np.abs(delta_hi_dim) + psc) * np.sign(delta_hi_dim), neigh_ixs, threads=threads, psc=psc)
+            if calculate_randomized:
+                logging.debug(f"Correlation Calculation for negative control")
+                delta_hi_dim_rndm = hi_dim_t_rndm - hi_dim
+                vlm.corrcoef_random = colDeltaCorSqrtpartial(hi_dim, np.sqrt(np.abs(delta_hi_dim_rndm) + psc) * np.sign(delta_hi_dim_rndm), neigh_ixs, threads=threads, psc=psc)
+        else:
+            raise NotImplementedError(f"transform={transform} is not a valid parameter")
+        np.fill_diagonal(vlm.corrcoef, 0)
+        if np.any(np.isnan(vlm.corrcoef)):
+            vlm.corrcoef[np.isnan(vlm.corrcoef)] = 1
+            logging.warning("Nans encountered in corrcoef and corrected to 1s. If not identical cells were present it is probably a small isolated cluster converging after imputation.")
+        if calculate_randomized:
+            np.fill_diagonal(vlm.corrcoef_random, 0)
+            if np.any(np.isnan(vlm.corrcoef_random)):
+                vlm.corrcoef_random[np.isnan(vlm.corrcoef_random)] = 1
+                logging.warning("Nans encountered in corrcoef_random and corrected to 1s. If not identical cells were present it is probably a small isolated cluster converging after imputation.")
+        logging.debug(f"Done Correlation Calculation")
+    else:
+        vlm.corr_calc = "full"
+        if "pcs" in hidim:  # sic
+            hi_dim = np.array(getattr(vlm, hidim).T[:, :ndims], order="C")
+            hi_dim_t = np.array(getattr(vlm, hidim + "_t").T[:, :ndims], order="C")
+        else:
+            if ndims is not None:
+                raise ValueError(f"ndims was set to {ndims} but hidim != 'pcs'. Set ndims = None for hidim='{hidim}'")
+            hi_dim = getattr(vlm, hidim)  # [:, :ndims]
+            hi_dim_t = hi_dim + vlm.used_delta_t * vlm.delta_S  # [:, :ndims] [:, :ndims]
+            if calculate_randomized:
+                vlm.delta_S_rndm = np.copy(vlm.delta_S)
+                vcy.analysis.permute_rows_nsign(vlm.delta_S_rndm)
+                hi_dim_t_rndm = hi_dim + vlm.used_delta_t * vlm.delta_S_rndm
+            
+        embedding = getattr(vlm, embed)
+        vlm.embedding = embedding
+        logging.debug("Calculate KNN in the embedding space")
+        nn = NearestNeighbors(n_neighbors=n_neighbors + 1, n_jobs=n_jobs)
+        nn.fit(embedding)
+        vlm.embedding_knn = nn.kneighbors_graph(mode="connectivity")
+        
+        logging.debug("Correlation Calculation 'full'")
+        if transform == "log":
+            delta_hi_dim = hi_dim_t - hi_dim
+            vlm.corrcoef = colDeltaCorLog10(hi_dim, np.log10(np.abs(delta_hi_dim) + psc) * np.sign(delta_hi_dim), threads=threads, psc=psc)
+            if calculate_randomized:
+                logging.debug(f"Correlation Calculation for negative control")
+                delta_hi_dim_rndm = hi_dim_t_rndm - hi_dim
+                vlm.corrcoef_random = colDeltaCorLog10(hi_dim, np.log10(np.abs(delta_hi_dim_rndm) + psc) * np.sign(delta_hi_dim_rndm), threads=threads, psc=psc)
+        elif transform == "logratio":
+            log2hidim = np.log2(hi_dim + psc)
+            delta_hi_dim = np.log2(np.abs(hi_dim_t) + psc) - log2hidim
+            vlm.corrcoef = colDeltaCor(log2hidim, delta_hi_dim, threads=threads)
+            if calculate_randomized:
+                logging.debug(f"Correlation Calculation for negative control")
+                delta_hi_dim_rndm = np.log2(np.abs(hi_dim_t_rndm) + 1) - log2hidim
+                vlm.corrcoef_random = colDeltaCor(log2hidim, delta_hi_dim_rndm, threads=threads)
+        elif transform == "linear":
+            vlm.corrcoef = colDeltaCor(hi_dim, hi_dim_t - hi_dim, threads=threads)
+            if calculate_randomized:
+                logging.debug(f"Correlation Calculation for negative control")
+                vlm.corrcoef_random = colDeltaCor(hi_dim, hi_dim_t_rndm - hi_dim, threads=threads, psc=psc)
+        elif transform == "sqrt":
+            delta_hi_dim = hi_dim_t - hi_dim
+            vlm.corrcoef = colDeltaCorSqrt(hi_dim, np.sqrt(np.abs(delta_hi_dim) + psc) * np.sign(delta_hi_dim), threads=threads, psc=psc)
+            if calculate_randomized:
+                logging.debug(f"Correlation Calculation for negative control")
+                delta_hi_dim_rndm = hi_dim_t_rndm - hi_dim
+                vlm.corrcoef_random = colDeltaCorSqrt(hi_dim, np.sqrt(np.abs(delta_hi_dim_rndm) + psc) * np.sign(delta_hi_dim_rndm), threads=threads, psc=psc)
+        else:
+            raise NotImplementedError(f"transform={transform} is not a valid parameter")
+        np.fill_diagonal(vlm.corrcoef, 0)
+        if calculate_randomized:
+            np.fill_diagonal(vlm.corrcoef_random, 0)
+    return(vlm)
 
 #%% data processing/calculations
 

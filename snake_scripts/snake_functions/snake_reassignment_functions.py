@@ -6,7 +6,8 @@ Created on Fri Jul 23 09:03:23 2021
 @author: yohanl
 """
 
-from snake_functions import snake_utils as my_utils
+from snake_scripts.snake_functions import snake_utils as my_utils
+# from snake_functions import snake_utils as my_utils
 import os
 import scanpy as sc
 import numpy as np

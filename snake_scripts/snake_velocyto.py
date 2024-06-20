@@ -102,14 +102,13 @@ vlm.extrapolate_cell_at_t(delta_t=1)
 
 
 
-
 #Use correlation to estimate transition probabilities for every cells to its embedding neighborhood
 #hidim --> high dimensional space
 #embed --> Name of the attribute containing the embedding, here it is PCs, but it could be  ts
 #Transform --> Transformation that is applied on the hidim. Can be sqrt or log
 #psc --> pseudocount added in variance normalizing transform
-vlm.estimate_transition_prob(hidim="Sx_sz", embed="Pcs", transform="log", psc=1,
-                             n_neighbors=150, knn_random=True, sampled_fraction=1)
+vlm=my_func.estimate_transition_prob_mod(vlm,hidim="Sx_sz", embed="Pcs", transform="log", psc=1, n_neighbors=150, knn_random=True, sampled_fraction=1)
+
 
 
 #Use the transition probability to project the velocity direction on the embedding

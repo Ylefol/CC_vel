@@ -28,7 +28,7 @@ replicates=os.listdir('data_files/confidence_intervals/'+cell_line)
 replicates.remove('merged_results')
 #Create layers, declare folder to use (either single replicate or merged replicates)
 layers=['spliced','unspliced']
-folder_to_use='A_B'
+folder_to_use='B'
 
 
 """Fetch the necessary files"""
@@ -57,13 +57,21 @@ significant_genes=list(t_test_res.loc[t_test_res['padjusted'] .isin(good_vals)].
 """Plots for single genes - two versions exists, each illustrating gene velocity"""
 
 #Print out the 'UNG' gene
+if 'TOP2A'in mean_dict['spliced'].keys():
+    gene_save_path='all_figures/'+cell_line+'/analysis_results/'+folder_to_use+'/gene_plots/'
+    my_func.plot_layer_smooth_vel('TOP2A', mean_dict, bool_dict, CI_dict, count_dict,vlm_dict,
+                                  vlm_mean_dict,boundary_dict,cell_line,save_path=gene_save_path+'layer_vel')
+    my_func.plot_curve_count('TOP2A', mean_dict, bool_dict, CI_dict, count_dict,boundary_dict,
+                             cell_line,save_path=gene_save_path+'vel_count')
+
+
+#Print out the 'UNG' gene
 if 'UNG'in mean_dict['spliced'].keys():
     gene_save_path='all_figures/'+cell_line+'/analysis_results/'+folder_to_use+'/gene_plots/'
     my_func.plot_layer_smooth_vel('UNG', mean_dict, bool_dict, CI_dict, count_dict,vlm_dict,
                                   vlm_mean_dict,boundary_dict,cell_line,save_path=gene_save_path+'layer_vel')
     my_func.plot_curve_count('UNG', mean_dict, bool_dict, CI_dict, count_dict,boundary_dict,
                              cell_line,save_path=gene_save_path+'vel_count')
-
 
 """Plots (Raincloud) for gene cell cycle delay"""
 

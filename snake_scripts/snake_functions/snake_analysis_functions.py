@@ -2148,7 +2148,7 @@ def plot_velocity_expression_zero_point(vel_dict,vel_CI_dict,bool_dict,vlm_dict,
     #### velocity plot with additional y label
     ax2 = plt.subplot(gs[1])
     main_dict=subset_the_dicts_merged_CI(gene_name,vel_dict,bool_dict,vel_CI_dict)
-    plot_vels_and_CIs(main_dict,ax2,plot_title=gene_name,boundary_dict=boundary_dict,single_rep=False)
+    plot_vels_and_CIs(main_dict,ax2,plot_title=gene_name,boundary_dict=boundary_dict)
     ax2.set_ylabel("velocity",labelpad=-10,fontsize=15)
     
     #### Zero point ranges
