@@ -1703,7 +1703,7 @@ def create_REAC_summary_plots(value_dict,boundary_dict,layer='spliced',second_la
     None.
 
     """
-    
+    # plt.rcParams["figure.figsize"] = (7.5,7.5)
     #Create color dict
     col_dict={}
     col_dict['spliced']=["#9577b8","#2a1344"]
@@ -1724,7 +1724,7 @@ def create_REAC_summary_plots(value_dict,boundary_dict,layer='spliced',second_la
     
     #Calculate the scaled genes and mean line
     for REAC in value_dict.keys():
-        
+        # plt.figure(None, (9.00,6.5), dpi=600)
         #Find total genes in the pathway
         REAC_file=pd.read_csv('data_files/REAC_pathways/'+REAC+'.txt',header=None)
         total_genes=len(REAC_file[0])
@@ -1749,7 +1749,7 @@ def create_REAC_summary_plots(value_dict,boundary_dict,layer='spliced',second_la
             second_val=second_val.T-np.max(second_val)*1.05
             ax.plot(my_x_axis, second_val, c=col_dict[second_layer][0],alpha=0.4)
             ax.plot(my_x_axis, second_mean, c=col_dict[second_layer][1],linewidth=3)
-            ax.set_ylim(-np.max(my_y)*1.02, np.max(my_y)*1.02)
+            ax.set_ylim(-np.max(my_y)*2, np.max(my_y)*2)
             
         else:
             ax.set_ylim(0, np.max(my_y)*1.02)
@@ -1774,13 +1774,13 @@ def create_REAC_summary_plots(value_dict,boundary_dict,layer='spliced',second_la
         #If the orientation is G2M, reverse the x axis
         if orientation == 'G2M':
             plt.gca().invert_xaxis()
-            plt.set_xlabel("order (reversed)")#,fontsize=20)
+            ax.set_xlabel("order (reversed)")#,fontsize=20)
         if not os.path.exists(plot_path):
             os.makedirs(plot_path, exist_ok=True)
-        plt.savefig(os.path.join(plot_path,REAC),dpi=300)
+        plt.savefig(os.path.join(plot_path,REAC),dpi=300, bbox_inches="tight")
         plt.clf()
         plt.close("all")
-        # plt.show()
+        plt.show()
         gc.collect()
 
 
@@ -2066,8 +2066,8 @@ def plot_spliced_velocity_expression_zero_point(mean_dict,CI_dict,bool_dict,vlm_
     
     #### Create plot legend
     from matplotlib.lines import Line2D
-    spli_leg=Line2D([0], [0],color='#542788', linewidth=2, linestyle='solid',label='spliced velocity')
-    unspli_leg=Line2D([0], [0],color='#542788', linewidth=2,alpha=0.5, linestyle='solid',label='spliced expression')   
+    spli_leg=Line2D([0], [0],color='#542788', linewidth=2, linestyle='solid',label='spliced \nvelocity')
+    unspli_leg=Line2D([0], [0],color='#542788', linewidth=2,alpha=0.5, linestyle='solid',label='spliced\nexpression')   
     lines_up=Line2D([0], [0],color='black', linewidth=1, linestyle='--',label='upper_CI')
     lines_down=Line2D([0], [0],color='black', linewidth=1, linestyle='solid',label='lower_CI')
     
@@ -2075,8 +2075,8 @@ def plot_spliced_velocity_expression_zero_point(mean_dict,CI_dict,bool_dict,vlm_
     G1_bar=Line2D([0], [0],color=colors_dict['G1'], linewidth=4, linestyle='solid',label='G1 cells')
     S_bar=Line2D([0], [0],color=colors_dict['S'], linewidth=4, linestyle='solid',label='S cells')
     
-    exp_peaks=Line2D([0], [0],color='darkred', linewidth=2, linestyle='solid',label='expression peaks')
-    vel_zero_bar=Line2D([0], [0],color='red',alpha=0.5, linewidth=4, linestyle='solid',label='velocity 0 point')
+    exp_peaks=Line2D([0], [0],color='darkred', linewidth=2, linestyle='solid',label='expression\npeaks')
+    vel_zero_bar=Line2D([0], [0],color='red',alpha=0.5, linewidth=4, linestyle='solid',label='velocity\n0 point')
 
     #Add necessary legend elements to the legend
     handles=[spli_leg,unspli_leg,G2M_bar,G1_bar,S_bar,lines_up,lines_down,exp_peaks,vel_zero_bar]
@@ -2509,10 +2509,11 @@ def find_phase_association(gene_df,mean_dict,CI_dict,boundary_dict,vlm_dict,laye
     
     #Iterate over all genes
     for gene in list(gene_df.index):
-        if gene_df[gene_df.index==gene].t[0]==0.0:
-            phase_association['peak_vel'].append('NA')
-            phase_association['peak_exp'].append('NA')
-            phase_association['start_vel'].append('NA')
+        if 't' in gene_df.columns:#If t is present, utilize the t-test score as what is rankable
+            if gene_df[gene_df.index==gene].t[0]==0.0:
+                phase_association['peak_vel'].append('NA')
+                phase_association['peak_exp'].append('NA')
+                phase_association['start_vel'].append('NA')
         else:
             #If low CI we want to search for when the layer has it's max value and when the CI is above 0
             if CI=='low_CI':
@@ -2595,6 +2596,8 @@ def create_t_test_rank_method(gene_df,iterations,replicates,mean_dict,CI_dict,bo
     
     #Calculate p_value
     my_pvals=list(stats.pt(FloatVector(gene_input_list),df=deg_of_freedom,lower_tail=BoolVector([False])))
+
+    # my_pvals=list(stats.pt(FloatVector(gene_input_list),df=deg_of_freedom,lower_tail=BoolVector([False])))
     my_pvals = [p * 2 for p in my_pvals] #Multiply by two due to two tailed hypothesis
 
     #Calculate p_adjsuted values
@@ -3020,6 +3023,126 @@ def get_sig_genes(cell_line,target_folder,t_test_based=True,delay_type=None,vari
 
     return return_genes
 
+
+
+def extreme_value_testing(iter_dict,ranked_df,mean_dict,CI_dict,boundary_dict,vlm_dict,use_rankable=False,number_of_shifts=10):
+    """
+    Function which performs extreme value testing on spliced velocity. For each gene the function will
+    randomly shift each of the iterations (essentially scrambling the pseudotime) 
+    of that genes a given number of times (number_of_shifts), each shift is saved.
+    Once all shifts have been performed an extreme value test is performed. The 
+    resulting pvalue, and subsequent adjusted pvalue (using FDR method) shows if 
+    a genes spliced expression fall under the category of extreme value.
+    In this context it means that the genes are likely involved in the pseudotime,
+    thus involved in the cell cycle
+    
+    The function also determines to which cell cycle phase each gene is associated 
+    to based on the data. This is accomplished through the find_phase_association function.
+
+    Parameters
+    ----------
+    iter_dict : dictionnary
+        A dictionnary containing all the iterations for a given cell line.
+        The dicitonnary should be generated from the create_iter_dict function 
+        in the utils functions
+    ranked_df : pandas dataframe
+        dataframe of ranked genes as returned by the create_gene_ranking function.
+    mean_dict : dictionnary
+        A dictionnary containing the velocity values for each gene at spliced and unspliced.
+    CI_dict : dictionnary
+        A dictionnary containing the upper and lower confidence interval for each gene at spliced and unspliced.
+    boundary_dict : dictionnary
+        A dictionnary indicating the cell boundaries for the cell cycle phases.
+    vlm_dict : dictionnary
+        Dictionnary containing the spliced and unpsliced values.
+    use_rankable : Boolean, optional
+        If only the rankable genes should be used. The default is False.
+    number_of_shifts : int, optional
+        The number of random shifts to perform to each iteration.. The default is 10.
+
+    Returns
+    -------
+    extreme_df : pandas dataframe
+        A dataframe containing the pvalue, adjusted pvalue, and phase associations
+        for each genes.
+
+    """
+    #Get required libraries and rpy imports
+    from scipy.stats import genextreme
+    from rpy2.robjects.packages import importr
+    from rpy2.robjects.vectors import FloatVector
+    stats = importr('stats')
+    
+    #Pre-generate the random shifts to ensure the same shift applies to all genes
+    random_shifts=[]
+    total_iters=len(iter_dict.keys())
+    first_key=list(iter_dict.keys())[0]
+    first_gene=list(iter_dict[first_key].keys())[0]
+    len_cells=iter_dict[first_key][first_gene].shape[0]
+    
+    num_tot_iters=10
+    for i in range(number_of_shifts*total_iters):
+        random_shifts.append(np.random.randint(0, len_cells))
+    
+    
+    if use_rankable:
+        target_genes=ranked_df.gene_name[ranked_df.spliced_low_CI>0]
+    else:
+        target_genes=ranked_df.gene_name
+        
+    num_per_iter=int(len(random_shifts)/num_tot_iters)
+
+    #Iterate over genes, perform the statistic
+    pvalues=[]
+    for gene in target_genes:
+        curr_gene=np.where(target_genes==gene)[0][0]
+        if curr_gene%100==0:
+            print(str(curr_gene+1)+'/'+str(len(target_genes)))
+        gene_arr=np.empty(shape=(len(iter_dict.keys()),len_cells))
+        for idx,key in enumerate(iter_dict.keys()):
+            gene_arr[idx] = iter_dict[key][gene]
+        # Assume real_waves is already a NumPy array of shape (n, 10)
+        n = gene_arr.shape[0]  # Dynamically get the number of rows
+        max_real = np.max(np.sum(gene_arr, axis=1)) / total_iters
+        # Preallocate array for the num_shifts sets of shifted waves
+        shifted_1000 = np.zeros((number_of_shifts, ))  # Shape (num_shifts, 10), each row is a set of 10 shifted waves
+        random_shift_iterator=0
+        for i in range(num_per_iter):
+            temp_waves = np.zeros((n, total_iters))  # Shape (n, 10), each column is one shifted wave
+            for j in range(number_of_shifts):
+                shift_value = random_shifts[random_shift_iterator]
+                random_shift_iterator=random_shift_iterator+1
+                
+                shifted_wave = np.roll(gene_arr[:,j], shift_value)
+                temp_waves[:, j] = shifted_wave
+            shifted_1000[i] = np.max(np.sum(temp_waves, axis=0)) / 10
+        # Assuming shifted_1000 is already computed as a NumPy array
+        shape, loc, scale = genextreme.fit(shifted_1000)
+        # Print the estimated parameters
+        # print(f"Shape: {shape}, Location: {loc}, Scale: {scale}")
+        p_value = genextreme.cdf(max_real / 10, c=shape, loc=loc, scale=scale) #Changed from sf to cdf
+        
+        pvalues.append(p_value)
+    
+    p_adjust = list(stats.p_adjust(FloatVector(pvalues),n=len(target_genes), method = 'fdr'))
+
+    #Create base dataframe with t value, p_value and padjusted value with associated
+    # gene names
+    dataframe_dict={}
+    dataframe_dict['pvalue']=pvalues
+    dataframe_dict['padjusted']=p_adjust
+    extreme_df = pd.DataFrame(dataframe_dict)
+    extreme_df.index=target_genes
+
+    # Find phases where layer CI begins and maxes out
+    found_phases=find_phase_association(extreme_df,mean_dict,CI_dict,boundary_dict,vlm_dict,'spliced','low_CI')
+    
+    #Add phases to df and return
+    extreme_df['phase_peak_vel']=found_phases['peak_vel']
+    extreme_df['phase_peak_exp']=found_phases['peak_exp']
+    extreme_df['phase_start_vel']=found_phases['start_vel']
+    
+    return extreme_df
 
 #%% GMM analysis functions
 

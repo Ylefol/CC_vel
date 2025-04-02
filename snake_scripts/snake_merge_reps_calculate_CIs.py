@@ -90,6 +90,9 @@ for layer in layers:
         if len(pos_vals)!=0:
             val_df[gene][pos_vals]=1
     
+    #Save index with delay
+    val_df.to_csv(path_to_results+'/'+layer+"/index.csv",index=True)
+    
     #Save delay dataframe
     val_df.to_csv(path_to_results+'/'+layer+"/vel_counts.csv",index=False)
     

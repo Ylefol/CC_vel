@@ -30,6 +30,12 @@ logs
 #Ignore snakemake metadata
 .snakemake
 
+#Ignore archive
+archive
+Deepcycle
+figures
+
+
 #Ignore R shenanigans
 .rhistory
 .Rhistory

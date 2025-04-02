@@ -28,7 +28,6 @@ filter_numbers['genes']=[len(adata.var)]
 #Create all folders
 main_path=my_func.set_up_folders_reassignment_script(cell_line_var,samp_var)
 
-
 barcode_list = []
 if sys.argv[2]!='None':
     for i in open(sys.argv[2],"r").readlines(): 

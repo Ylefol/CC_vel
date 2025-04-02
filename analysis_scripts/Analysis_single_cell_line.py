@@ -28,8 +28,8 @@ replicates=os.listdir('data_files/confidence_intervals/'+cell_line)
 replicates.remove('merged_results')
 #Create layers, declare folder to use (either single replicate or merged replicates)
 layers=['spliced','unspliced']
-folder_to_use='B'
-
+folder_to_use='X'
+orientation='G2M'
 
 """Fetch the necessary files"""
 
@@ -91,13 +91,13 @@ my_func.raincloud_delay_two_files_two_categories(my_rankable_delays,sig_delay,'i
 """Plots the pseudotime trajectory of specific REACTOME pathways *can be RAM heavy*"""
 #Plot for all genes
 REAC_save_path='all_figures/'+cell_line+'/analysis_results/'+folder_to_use+'/REAC_rankable'
-REAC_dict=my_func.create_REAC_dict(vlm_mean_dict,rankable_genes)
-my_func.create_REAC_summary_plots(REAC_dict,boundary_dict,layer='spliced',second_layer='unspliced',plot_path=REAC_save_path)
+REAC_dict=my_func.create_REAC_dict(vlm_mean_dict,rankable_genes,orientation=orientation)
+my_func.create_REAC_summary_plots(REAC_dict,boundary_dict,layer='spliced',second_layer='unspliced',plot_path=REAC_save_path,orientation=orientation)
 
 #Plot for significant genes
 REAC_save_path='all_figures/'+cell_line+'/analysis_results/'+folder_to_use+'/REAC_significant'
-REAC_dict=my_func.create_REAC_dict(vlm_mean_dict,significant_genes)
-my_func.create_REAC_summary_plots(REAC_dict,boundary_dict,layer='spliced',second_layer='unspliced',plot_path=REAC_save_path)
+REAC_dict=my_func.create_REAC_dict(vlm_mean_dict,significant_genes,orientation=orientation)
+my_func.create_REAC_summary_plots(REAC_dict,boundary_dict,layer='spliced',second_layer='unspliced',plot_path=REAC_save_path,orientation=orientation)
 
 
 """A plot which shows matching points between velocity and expression peaks for individual genes"""
@@ -105,4 +105,4 @@ my_func.create_REAC_summary_plots(REAC_dict,boundary_dict,layer='spliced',second
 
 my_func.plot_spliced_velocity_expression_zero_point(mean_dict,CI_dict,bool_dict,vlm_mean_dict,boundary_dict,'UNG',plot_name='UNG_1.png')
 
-my_func.plot_velocity_expression_zero_point(mean_dict,CI_dict,bool_dict,vlm_dict,vlm_mean_dict,boundary_dict,'UNG',plot_name='UNG_2.png')
+my_func.plot_velocity_expression_zero_point(mean_dict,CI_dict,bool_dict,vlm_dict,vlm_mean_dict,boundary_dict,'TOP2A',plot_name='TOP2A_2.png')

@@ -408,7 +408,42 @@ def moving_average(array, window_size=200,orientation=None) :
         
     return moving_averages
 
+def create_iter_dict(cell_line,replicates,number_of_iters):
+    """
+    Function which creates a dictionnary of all iterations performed during the
+    pipeline. Iterations are created in the 'velocyto_iterations' rule of snakemake.
+    Each iteration is stored in it's own key and named accordingly (ex: A_1).
+    The dicitonnary is then balanced. Meaning that the dataframes (keys of the dictionnary)
+    are reduced to contain the same number of cells and the same genes.
 
+    Parameters
+    ----------
+    cell_line : string
+        The cell line targetted.
+    replicates : list
+        which replicates of the cell line are of interest.
+    number_of_iters : int
+        The number of iterations done with the cell line.
+
+    Returns
+    -------
+    iter_dict : dictionnary
+        The resulting dictionnary containing the balanced dataframe of each
+        iteration.
+
+    """
+    data_dict={}
+    for rep in replicates:
+        for i in range(number_of_iters):
+            i=i+1
+            temp_df='data_files/confidence_intervals/'+cell_line+'/'+rep+'/Velocity_iterations/spliced/'+str(i)+'.bin'
+            temp_df=np.load(temp_df,allow_pickle=True)
+            key_name=rep+'_'+str(i)
+            data_dict[key_name]=temp_df
+
+    iter_dict=balance_dataframes(data_dict)
+    
+    return iter_dict
 
 #%%Extras ?
 
