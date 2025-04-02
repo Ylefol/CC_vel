@@ -39,6 +39,12 @@ logs
 #Ignore results
 all_figures
 
+#Ignore other stuff
+archive
+Deepcycle
+Misc
+figures
+
 #Ignore big TCGA file
 R_scripts/TCGA_all_dta.rda
 
