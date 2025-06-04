@@ -201,7 +201,7 @@ def prep_variances_for_TS(mean_dict,boundary_dict,keys_to_use='All'):
     gene_name=next(iter(mean_dict['spliced']))
     
     if keys_to_use != 'All' and keys_to_use != 'Both' and keys_to_use != 'Phases':
-        print("The entered 'keys_to_use' parameter was no bueno")
+        print("The entered 'keys_to_use' parameter was incorrect.")
         return None,None
     
     
@@ -235,7 +235,7 @@ def prep_variances_for_TS(mean_dict,boundary_dict,keys_to_use='All'):
     return gene_dict,variance_dict
 
 
-def target_scan_analysis(TS_path,gene_dict,cell_line,miR_thresh,miRNA_list=None):
+def target_scan_analysis(TS_path,genes,cell_line,miR_thresh,miRNA_list=None):
     """
     Function that uses a targetscan prediction file and creates three dictionnaries
     based on the number of target sites observed, the weight context score of each gene
@@ -249,8 +249,8 @@ def target_scan_analysis(TS_path,gene_dict,cell_line,miR_thresh,miRNA_list=None)
     ----------
     TS_path : string
         The file patht to the TargetScan prediction file.
-    gene_dict : dictionnary
-        A dictionnary containing categoris and gene names.
+    genes : pandas dataframe
+        A dataframe containing gene_names
     cell_line : string
         A string indicating the cell_line used
     miR_thresh : string
@@ -281,45 +281,45 @@ def target_scan_analysis(TS_path,gene_dict,cell_line,miR_thresh,miRNA_list=None)
     if miRNA_list is not None:
         TargetScan_file=TargetScan_file[TargetScan_file['miRNA'].isin(miRNA_list)]
 
-    TargetScan_file=TargetScan_file[TargetScan_file['Gene Symbol'].isin(gene_dict[list(gene_dict.keys())[0]])]
+    TargetScan_file=TargetScan_file[TargetScan_file['Gene Symbol'].isin(genes['gene_names'])]
     df_gene_miR=TargetScan_file[['miRNA','Gene Symbol']]
     df_gene_miR=df_gene_miR.set_index(np.arange(0,len(df_gene_miR.index)))
 
     output_dict={}
     output_weight_dict={}
-    sum_weight_dict={}
-    for key in gene_dict.keys():
-        gene_list=gene_dict[key]
-        output_dict[str(key)]={}
-        output_weight_dict[str(key)+'_weighted']={}
-        sum_weight_dict[key]=[]
-        list_no_miRNA=[]
-        total_num=0
-        total_good_num=0
-        for gene in gene_list:
-            num_found=len(np.where(TargetScan_file['Gene Symbol']==gene)[0])
-            if num_found==0:
-                list_no_miRNA.append(gene)
-            else:
-                total_num=total_num+num_found
-                
-            if num_found in output_dict[str(key)]:#Key exists
-                output_dict[str(key)][num_found].append(gene)
-            else:#create key and add gene
-                output_dict[str(key)][num_found]=[gene]
-            
-            subset=TargetScan_file[TargetScan_file['Gene Symbol']==gene]
-            sum_weight=sum(subset['weighted context++ score'])
-            sum_weight_dict[key].append(sum_weight)
-            
-            good_targets=len(np.where(subset['weighted context++ score']<=-0.3)[0])
-            
-            if good_targets in output_weight_dict[str(key)+'_weighted']:#Key existsts
-                output_weight_dict[str(key)+'_weighted'][good_targets].append(gene)
-            else:#create key and add gene
-                output_weight_dict[str(key)+'_weighted'][good_targets]=[gene]
-            
-            total_good_num=total_good_num+good_targets
+    
+    gene_list=genes['gene_names']
+    sum_weight_list=[]
+    list_no_miRNA=[]
+    total_num=0
+    total_good_num=0
+    for gene in gene_list:
+        #Number found represents the number of miRNA found for a given gene symbol
+        num_found=len(np.where(TargetScan_file['Gene Symbol']==gene)[0])
+        if num_found==0:
+            list_no_miRNA.append(gene)
+        else:
+            total_num=total_num+num_found
+        
+        #Checks if we already have an entry for that number of miRNA found
+        if num_found in output_dict.keys():#Key exists
+            output_dict[num_found].append(gene)
+        else:#create key and add gene
+            output_dict[num_found]=[gene]
+        
+        #Sum the wieghts together
+        subset=TargetScan_file[TargetScan_file['Gene Symbol']==gene]
+        sum_weight=sum(subset['weighted context++ score'])
+        sum_weight_list.append(sum_weight)
+        
+        good_targets=len(np.where(subset['weighted context++ score']<=-0.3)[0])
+        
+        if good_targets in output_weight_dict:#Key existsts
+            output_weight_dict[good_targets].append(gene)
+        else:#create key and add gene
+            output_weight_dict[good_targets]=[gene]
+        
+        total_good_num=total_good_num+good_targets
 
     # print("For this dict: "+str(key))
     elem_1='Information for '+cell_line+' '+miR_thresh+'\n'
@@ -330,12 +330,23 @@ def target_scan_analysis(TS_path,gene_dict,cell_line,miR_thresh,miRNA_list=None)
     elem_6='Total number of targets with a weighted context <-0.3: '+str(total_good_num)+'\n'
     
     text_res=elem_1+elem_2+elem_3+elem_4+elem_5+elem_6
-
-    return output_dict,output_weight_dict,sum_weight_dict,df_gene_miR,text_res
+    
+    #update genes with miRNA data and weights
+    genes['weight']=sum_weight_list
+    miR_col=[]
+    for gene in genes['gene_names']:
+        miRNA_idx=list(np.where(df_gene_miR['Gene Symbol']==gene)[0])
+        miRNA_df_subset=df_gene_miR.loc[miRNA_idx]
+        miR_slash_list = '/'.join(miRNA_df_subset["miRNA"])
+        miR_col.append(miR_slash_list)
+    genes['miRNAs']=miR_col
+    
+    #return output_dict,output_weight_dict,sum_weight_list,df_gene_miR,text_res
+    return genes,text_res
 
 #%% Plotting functions
     
-def create_miRweight_boxplot(vari_df, weight_dict, target_key, cell_line,plot_name,miR_thresh,delay_cutoff=None,save_path=''):
+def create_miRweight_boxplot(vari_df, target_key, cell_line,plot_name,miR_thresh,delay_cutoff=None,save_path=''):
     """
     Function which creates a boxplot showing the difference in variance
     between three groups of miRNA weights (0,>=-0.3, and <-0.3).
@@ -349,8 +360,6 @@ def create_miRweight_boxplot(vari_df, weight_dict, target_key, cell_line,plot_na
     ----------
     vari_df : pandas dataframe
         dataframe containing the name of the genes along with their variance.
-    weight_dict : dictionnary
-        dictionnary containing the gene names and the associated miRNA weight.
     target_key : string
         key that indicates which subset of information needs to be plotted.
     cell_line : string
@@ -371,7 +380,9 @@ def create_miRweight_boxplot(vari_df, weight_dict, target_key, cell_line,plot_na
     """
     new_df=vari_df.copy()
     new_df['genes']=vari_df['gene_names']
-    # new_df['miRNAs']=vari_df['miRNAs']
+   
+    #Trying to add weight - can do that
+    
     new_df['miR_weights']=vari_df['weight']
     new_df['variance']=vari_df[target_key]
     
@@ -388,15 +399,15 @@ def create_miRweight_boxplot(vari_df, weight_dict, target_key, cell_line,plot_na
     #Apply the cutoff if necessary
     if delay_cutoff:
         extracted_df=extracted_df[abs(extracted_df.variance)<=delay_cutoff]
-    #Find number of genes in each groups
+    #Find number of miRNAs and unique miRNAs in each groups
     sub_df_1=extracted_df[(extracted_df['miR_weights'] == 0)]
-    G1_num=str(len(extract_miRNA_num(sub_df_1['miRNAs'])))+' | '+str(len(set(extract_miRNA_num(sub_df_1['miRNAs']))))
+    G1_num='('+str(len(extract_miRNA_num(sub_df_1['miRNAs'])))+' | '+str(len(set(extract_miRNA_num(sub_df_1['miRNAs'])))) +')\n'+ str(len(sub_df_1))
     
     sub_df_2=extracted_df[(extracted_df['miR_weights'] < 0) & (extracted_df['miR_weights'] >= -0.3)]
-    G2_num=str(len(extract_miRNA_num(sub_df_2['miRNAs'])))+' | '+str(len(set(extract_miRNA_num(sub_df_2['miRNAs']))))
+    G2_num='('+str(len(extract_miRNA_num(sub_df_2['miRNAs'])))+' | '+str(len(set(extract_miRNA_num(sub_df_2['miRNAs'])))) +')\n'+ str(len(sub_df_2))
     
     sub_df_3=extracted_df[(extracted_df['miR_weights'] < -0.3)]
-    G3_num=str(len(extract_miRNA_num(sub_df_3['miRNAs'])))+' | '+str(len(set(extract_miRNA_num(sub_df_3['miRNAs']))))
+    G3_num='('+str(len(extract_miRNA_num(sub_df_3['miRNAs'])))+' | '+str(len(set(extract_miRNA_num(sub_df_3['miRNAs'])))) +')\n'+ str(len(sub_df_3))
 
     # Convert results to log10
     sub_list_3=np.log10(list(extracted_df.variance[extracted_df.miR_weights==0]))
@@ -431,7 +442,7 @@ def create_miRweight_boxplot(vari_df, weight_dict, target_key, cell_line,plot_na
     ax.set_aspect(0.17)
     bp = ax.boxplot(data_list)
     # bp["medians"][0][0][1]=3
-    X_axis_labels=['0\n('+str(G1_num)+')', '>= -0.3\n('+str(G2_num)+')', '< -0.3\n('+str(G3_num)+')']
+    X_axis_labels=['0\n'+str(G1_num), '>= -0.3\n'+str(G2_num), '< -0.3\n'+str(G3_num)]
     X_axis_labels.reverse()
     plt.xticks([1, 2, 3],X_axis_labels ,size=15)
     plt.yticks(size=15)
@@ -535,7 +546,7 @@ def expression_bar_plot(miR_dta_dict,miR_thresh,layer,plot_path):
     std_temp=std_list
     up_bool=False
     down_bool=True
-    print(down_bool)
+    # print(down_bool)
     #Plot transparent bar to make labeling easier
     transparent_res = [x + y for x, y in zip(mean_list, std_temp)]
     rects2 = ax.bar(X_axis, transparent_res, width, color='w',alpha=1)
@@ -613,8 +624,36 @@ def expression_bar_plot(miR_dta_dict,miR_thresh,layer,plot_path):
     plt.title("Expression for "+layer+" genes, All cells | "+miR_thresh)
     plot_path=plot_path+'/'+miR_thresh
     # plt.show()
+    fig.tight_layout()
     plt.savefig(plot_path+'/'+layer+'_All.png')
     plt.close()
+
+def concatenate_miR_plots(file_path,thresh_order,plot_title):
+    #Create the figure
+    # fig, axes = plt.subplots(ncols=3, nrows=3, figsize=(25, 10), layout='constrained')
+
+    fig, axes = plt.subplots(3, 3,figsize=(25, 10))
+    # thresh_order.reverse()
+    for idx,val in enumerate(thresh_order):
+        
+        ax = axes[0,idx]
+        ax.axis('off')
+        image = plt.imread(file_path+'/'+str(val)+'/miR_All.png')
+        ax.imshow(image)
+        ax = axes[1, idx]
+        ax.axis('off')
+        image = plt.imread(file_path+'/'+str(val)+'/spliced_All.png')
+        ax.imshow(image)
+        ax = axes[2, idx]
+        ax.axis('off')
+        image = plt.imread(file_path+'/'+str(val)+'/unspliced_All.png')
+        ax.imshow(image)  
+            
+    fig.suptitle(plot_title, fontsize=25,va='top')
+    fig.tight_layout()
+    plt.savefig(file_path+'/Concatenation_All.png')#, bbox_inches="tight")
+    plt.show()
+
 
 #%% Wrapper functions for analysis
 
@@ -678,24 +717,23 @@ def wrapper_miRNA_boxplot_analysis(cell_line,replicates,layers,target_folder,var
     mean_dict,CI_dict,bool_dict,count_dict,boundary_dict=my_utils.get_CI_data(cell_line,layers,target_folder,gene_selection)
     gene_dict,variance_dict=prep_variances_for_TS(mean_dict,boundary_dict,keys_to_use=variance_param)
     
+    #Get expression values
+    exp_values=my_utils.get_vlm_values(cell_line,layers,target_folder,get_mean=False)
+
     #Convert to proper format
     variance_df = pd.DataFrame.from_dict(variance_dict)
     variance_df['gene_names']=variance_df.index
     
-    #Ensures that the order is the same as in gene_dict - this is very important
-    first_gene_dict_key=list(gene_dict.keys())[0]
-    true_sort = [s for s in gene_dict[first_gene_dict_key] if s in variance_df.gene_names.unique()]
-    variance_df = variance_df.set_index('gene_names').loc[true_sort].reset_index()
-    
-    
     gene_exclusion_list=[]
+    miR_dta_dict={}
     for miRNA_thresh in miRNA_thresh_list:
+        miR_dta_dict[miRNA_thresh]={}
+        
         #Perform miRNA analysis
         path_miRNA='data_files/miRNA_files/categorized/'+cell_line+'_miRNA_'+str(miRNA_thresh)+'.csv'
         miRNA_pd=pd.read_csv(path_miRNA)
         miRNA_list=list(miRNA_pd.found)
-        TS_dict,TS_weight_dict,sum_weight_dict,miRNA_df,text_res=target_scan_analysis(TS_path,gene_dict=gene_dict,cell_line=cell_line,miR_thresh=miRNA_thresh,miRNA_list=miRNA_list)
-        
+        variance_df,text_res=target_scan_analysis(TS_path,genes=variance_df,cell_line=cell_line,miR_thresh=miRNA_thresh,miRNA_list=miRNA_list)
         #Remove genes in necessary
         if len(gene_exclusion_list) != 0:
             gene_removal_values=variance_df.gene_names.isin(gene_exclusion_list).value_counts()
@@ -704,34 +742,42 @@ def wrapper_miRNA_boxplot_analysis(cell_line,replicates,layers,target_folder,var
                     text_res=text_res+"Removing "+str(cnts)+" genes using the provided exclusion list"
             good_idx=list(np.where(~variance_df["gene_names"].isin(gene_exclusion_list)==True)[0])
             variance_df=variance_df.iloc[good_idx]
+
+        miR_dta_dict[miRNA_thresh]['sum_weight_dict']=variance_df['weight']
+        
+        #For the particular threshold, get the genes in each miRNA score group
+        for layer in layers:
+            miR_dta_dict[miRNA_thresh][layer]={}
+            target_genes=variance_df['gene_names'].iloc[np.where(variance_df['weight']==0)[0]]
+            miR_dta_dict[miRNA_thresh][layer]['weight_0']=exp_values[layer][target_genes]
             
-            #Subset_sum_weight_dict
-            for key in sum_weight_dict.keys():
-                sum_weight_dict[key] = [sum_weight_dict[key][i] for i in good_idx]
+            target_genes=variance_df['gene_names'].iloc[np.where((variance_df['weight']<0)&(variance_df['weight']>=-0.3))[0]]
+            miR_dta_dict[miRNA_thresh][layer]['weight_>-0.3']=exp_values[layer][target_genes]
             
+            target_genes=variance_df['gene_names'].iloc[np.where(variance_df['weight']<-0.3)[0]]
+            miR_dta_dict[miRNA_thresh][layer]['weight_<-0.3']=exp_values[layer][target_genes]
+        
+        
+        keys=list(variance_df.columns)
+        keys.remove('gene_names')
+        keys.remove('weight')
+        keys.remove('miRNAs')
         
         #Plot the boxplots
-        for key in sum_weight_dict.keys():
-            my_name=key+'_'+str(miRNA_thresh)
-            create_miRweight_boxplot(vari_df=variance_df, weight_dict=sum_weight_dict, target_key=key, cell_line=cell_line,plot_name=my_name,miR_thresh=miRNA_thresh,delay_cutoff=None,save_path=save_path)
-    
+        for key in keys:
+            my_name='miR_'+key
+            create_miRweight_boxplot(vari_df=variance_df, target_key=key, cell_line=cell_line,plot_name=my_name,miR_thresh=miRNA_thresh,delay_cutoff=None,save_path=save_path)
+            expression_bar_plot(miR_dta_dict,miRNA_thresh,'spliced',save_path)
+            expression_bar_plot(miR_dta_dict,miRNA_thresh,'unspliced',save_path)
         #Save text res
-        with open(save_path+'/'+my_name+'_genes_used_summary.txt', 'w') as f:
+        with open(save_path+'/'+miRNA_thresh+'_genes_used_summary.txt', 'w') as f:
             f.write(text_res)
 
     
         #Update gene exclusion list
         result_df=variance_df.copy()
-        result_df['weight']=sum_weight_dict[list(sum_weight_dict.keys())[0]]
-        miR_col=[]
-        for gene in result_df['gene_names']:
-            miRNA_idx=list(np.where(miRNA_df['Gene Symbol']==gene)[0])
-            miRNA_df_subset=miRNA_df.loc[miRNA_idx]
-            miR_slash_list = '/'.join(miRNA_df_subset["miRNA"])
-            miR_col.append(miR_slash_list)
-        result_df['miRNAs']=miR_col
                 
-        save_name=save_path+'/'+my_name+'_data_results.csv'
+        save_name=save_path+'/'+miRNA_thresh+'_data_results.csv'
         result_df.to_csv(save_name,index=False)
         
         idx_genes_with_weights=list(np.where(result_df.weight!=0)[0])

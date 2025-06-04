@@ -17,7 +17,7 @@ import os
 import numpy as np
 import pandas as pd
 
-cell_line='293t'
+cell_line='HaCat'
 # cell_line=key
 #Find replicates
 replicates=os.listdir('data_files/confidence_intervals/'+cell_line)
@@ -26,7 +26,7 @@ replicates.remove('merged_results')
 layers=['spliced','unspliced']
 
 
-folder_to_use='A_B_C_D'
+folder_to_use='A_B'
 
 mean_dict,CI_dict,bool_dict,count_dict,boundary_dict=my_utils.get_CI_data (cell_line, layers, folder_to_use)
 my_ranked_genes=pd.read_csv('data_files/data_results/rank/'+cell_line+'/'+folder_to_use+'_ranked_genes.csv')
@@ -40,6 +40,9 @@ rankable_genes=list(my_ranked_genes['gene_name'][np.where(np.asanyarray(my_ranke
 miRNA_thresh_list=['1000_None','100_1000','0_100']
 save_path='all_figures/'+cell_line+'/analysis_results/'+folder_to_use+'/miRNA_rankable_genes_plots'
 my_miR_func.wrapper_miRNA_boxplot_analysis(cell_line,replicates,layers,folder_to_use,'Both',miRNA_thresh_list,save_path,gene_selection=rankable_genes,single_rep=False)
+
+my_miR_func.concatenate_miR_plots(file_path=save_path,thresh_order=miRNA_thresh_list,plot_title='All_'+cell_line+'_'+folder_to_use)
+
 # for rep in replicates:
 #     my_func.wrapper_miRNA_boxplot_analysis(cell_line,replicates,layers,rep,'Both',miRNA_thresh_list,save_path,single_rep=True)
 
@@ -56,6 +59,8 @@ for gene in all_cc_genes:
 miRNA_thresh_list=['1000_None','100_1000','0_100']
 save_path='all_figures/'+cell_line+'/analysis_results/'+folder_to_use+'/miRNA_cc_genes_plots'
 my_miR_func.wrapper_miRNA_boxplot_analysis(cell_line,replicates,layers,folder_to_use,'Both',miRNA_thresh_list,save_path,gene_selection=cc_genes,single_rep=False)
+my_miR_func.concatenate_miR_plots(file_path=save_path,thresh_order=miRNA_thresh_list,plot_title='All_'+cell_line+'_'+folder_to_use)
+
 # for rep in replicates:
 #     my_func.wrapper_miRNA_boxplot_analysis(cell_line,replicates,layers,rep,'Both',miRNA_thresh_list,save_path,single_rep=True)
 
@@ -65,6 +70,7 @@ significant_genes=my_func.get_sig_genes(cell_line,folder_to_use,t_test_based=Tru
 miRNA_thresh_list=['1000_None','100_1000','0_100']
 save_path='all_figures/'+cell_line+'/analysis_results/'+folder_to_use+'/miRNA_t_delay_var_genes_plots'
 my_miR_func.wrapper_miRNA_boxplot_analysis(cell_line,replicates,layers,folder_to_use,'Both',miRNA_thresh_list,save_path,gene_selection=significant_genes,single_rep=False)
+my_miR_func.concatenate_miR_plots(file_path=save_path,thresh_order=miRNA_thresh_list,plot_title='All_'+cell_line+'_'+folder_to_use)
 
 
 # plot miRNA boxplots for significant genes (delay)
@@ -73,6 +79,7 @@ significant_genes=my_func.get_sig_genes(cell_line,folder_to_use,t_test_based=Fal
 miRNA_thresh_list=['1000_None','100_1000','0_100']
 save_path='all_figures/'+cell_line+'/analysis_results/'+folder_to_use+'/miRNA_delay_genes_plots'
 my_miR_func.wrapper_miRNA_boxplot_analysis(cell_line,replicates,layers,folder_to_use,'Both',miRNA_thresh_list,save_path,gene_selection=significant_genes,single_rep=False)
+my_miR_func.concatenate_miR_plots(file_path=save_path,thresh_order=miRNA_thresh_list,plot_title='All_'+cell_line+'_'+folder_to_use)
 
 
 # plot miRNA boxplots for significant genes (var)
@@ -81,6 +88,8 @@ significant_genes=my_func.get_sig_genes(cell_line,folder_to_use,t_test_based=Fal
 miRNA_thresh_list=['1000_None','100_1000','0_100']
 save_path='all_figures/'+cell_line+'/analysis_results/'+folder_to_use+'/miRNA_var_genes_plots'
 my_miR_func.wrapper_miRNA_boxplot_analysis(cell_line,replicates,layers,folder_to_use,'Both',miRNA_thresh_list,save_path,gene_selection=significant_genes,single_rep=False)
+my_miR_func.concatenate_miR_plots(file_path=save_path,thresh_order=miRNA_thresh_list,plot_title='All_'+cell_line+'_'+folder_to_use)
+
 
 # plot miRNA boxplots for significant genes (var)
 #################
@@ -88,4 +97,5 @@ significant_genes=my_func.get_sig_genes(cell_line,folder_to_use,t_test_based=Tru
 miRNA_thresh_list=['1000_None','100_1000','0_100']
 save_path='all_figures/'+cell_line+'/analysis_results/'+folder_to_use+'/miRNA_sig_t_genes_plots'
 my_miR_func.wrapper_miRNA_boxplot_analysis(cell_line,replicates,layers,folder_to_use,'Both',miRNA_thresh_list,save_path,gene_selection=significant_genes,single_rep=False)
+my_miR_func.concatenate_miR_plots(file_path=save_path,thresh_order=miRNA_thresh_list,plot_title='All_'+cell_line+'_'+folder_to_use)
 
