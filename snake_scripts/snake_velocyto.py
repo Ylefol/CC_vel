@@ -61,7 +61,7 @@ vlm.filter_cells(bool_array=np.in1d(np.arange(vlm.S.shape[1]), downsample_ixs)) 
 boundary_dict=my_func.create_boundary_dict(vlm)
 
 #plot fractions and values
-my_func.plot_fractions_mod(vlm, title=cell_line_var+" fractions pre-filter",save2file=main_path+'/plot_fractions_pre')
+#my_func.plot_fractions_mod(vlm, title=cell_line_var+" fractions pre-filter",save2file=main_path+'/plot_fractions_pre')
 
 #filters specific layers based on specified quantites in dp (beginning of code)
 vlm.score_detection_levels(min_expr_counts=30, min_cells_express=10, min_expr_counts_U=30, min_cells_express_U=10)
@@ -69,7 +69,7 @@ vlm.filter_genes(by_detection_levels=True, by_cluster_expression=False)
 
 
 #plot fractions and values
-my_func.plot_fractions_mod(vlm, title=cell_line_var+" fractions post-filter",save2file=main_path+'/plot_fractions_post')
+#my_func.plot_fractions_mod(vlm, title=cell_line_var+" fractions post-filter",save2file=main_path+'/plot_fractions_post')
 
 #Normalize unspliced and spliced layer
 combined_size = (vlm.S.sum(0) / np.percentile(vlm.S.sum(0), 95)) + (vlm.initial_cell_size / np.percentile(vlm.initial_cell_size, 95))

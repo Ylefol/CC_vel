@@ -24,7 +24,8 @@ except:
     from snake_scripts.snake_functions import snake_utils as my_utils
 
 import matplotlib.pyplot as plt
-
+import matplotlib as mpl
+import matplotlib.patches as mpatches
 
 #%% Processing and sorting
 
@@ -164,6 +165,94 @@ def extract_miRNA_num(input_list):
 
     miR_list = [i for a,i in enumerate(miR_list) if i!='']
     return(miR_list)
+
+
+def calculate_siginificance_between_miRNA_groups(miR_data,miRNA_thresh_list):
+    new_dict={}
+    for key in miR_data.keys():
+        if key.endswith("geneNum"):
+            continue
+        for i in range(len(miRNA_thresh_list)):
+            thresh=miRNA_thresh_list[i]
+            new_dict[key+' '+thresh]=miR_data[key][i]
+    
+    import scipy.stats as stats
+    
+    result_dict={}
+    for key_1 in new_dict.keys():
+        for key_2 in new_dict.keys():
+            if key_1==key_2:
+                continue
+            #Check if comparison was already done
+            if key_1+' vs '+key_2 in result_dict.keys():
+                continue
+            if key_2+' vs '+key_1 in result_dict.keys():
+                continue
+            #Do the thing
+            arr_1=np.array(new_dict[key_1])
+            arr_2=np.array(new_dict[key_2])
+            
+            pval_res=stats.ttest_ind_from_stats(arr_1.mean(), arr_1.std(), len(arr_1),
+                                                arr_2.mean(), arr_2.std(), len(arr_2),
+                                                False)[1]
+            result_dict[key_1+' vs '+key_2]=pval_res
+    
+    return result_dict
+
+
+def find_boxplot_line_location(boxplot_dict,statistics_to_add):
+    #Find max value
+    possible_values=[]
+    for k in range(len(boxplot_dict)):
+        for i in range(len(boxplot_dict[k]['whiskers'])):
+            for arr in boxplot_dict[k]['whiskers'][i].get_data():
+                possible_values.append(max(arr))
+    
+    inc_amount=0.01*max(possible_values)
+    
+    
+    #For each dict key we need two lines
+    #Lines are stored in a dict from left to right value
+    line_loc_dict={}
+    dict_iter=0
+    for key in boxplot_dict.keys():
+        #Get data
+        box1_data=boxplot_dict[0]['boxes'][key].get_path().vertices
+        box2_data=boxplot_dict[1]['boxes'][key].get_path().vertices
+        box3_data=boxplot_dict[2]['boxes'][key].get_path().vertices
+        
+        #Height, then start and end of x
+        first_line_coor=[]
+        first_line_coor.append(max(box1_data[2][1],box2_data[2][1])+inc_amount)#Height
+        first_line_coor.append((box1_data[0][0]+box1_data[1][0])/2)#Start x
+        first_line_coor.append((box2_data[0][0]+box2_data[1][0])/2)#end x
+        line_loc_dict[dict_iter]=first_line_coor
+        dict_iter=dict_iter+1
+        
+        second_line_coor=[]
+        second_line_coor.append(max(box2_data[2][1],box3_data[2][1])+inc_amount)#Height
+        second_line_coor.append((box2_data[0][0]+box2_data[1][0])/2)#Start x
+        second_line_coor.append((box3_data[0][0]+box3_data[1][0])/2)#end x
+        line_loc_dict[dict_iter]=second_line_coor
+        dict_iter=dict_iter+1
+    
+    #Hardcode the statistics lines
+    for line in line_loc_dict.keys():
+        if line==0:
+            line_loc_dict[line].append(statistics_to_add['< -0.3 1000_None vs < -0.3 100_1000'])
+        elif line==1:
+            line_loc_dict[line].append(statistics_to_add['< -0.3 100_1000 vs < -0.3 0_100'])
+        elif line==2:
+            line_loc_dict[line].append(statistics_to_add['>= -0.3 1000_None vs >= -0.3 100_1000'])
+        elif line==3:
+            line_loc_dict[line].append(statistics_to_add['>= -0.3 100_1000 vs >= -0.3 0_100'])
+        elif line==4:
+            line_loc_dict[line].append(statistics_to_add['0 1000_None vs 0 100_1000'])
+        elif line==5:
+            line_loc_dict[line].append(statistics_to_add['0 100_1000 vs 0 0_100'])
+    
+    
+    return line_loc_dict
 
 #%% Target scan functions
 
@@ -410,9 +499,9 @@ def create_miRweight_boxplot(vari_df, target_key, cell_line,plot_name,miR_thresh
     G3_num='('+str(len(extract_miRNA_num(sub_df_3['miRNAs'])))+' | '+str(len(set(extract_miRNA_num(sub_df_3['miRNAs'])))) +')\n'+ str(len(sub_df_3))
 
     # Convert results to log10
-    sub_list_3=np.log10(list(extracted_df.variance[extracted_df.miR_weights==0]))
-    sub_list_2=np.log10(list(extracted_df.variance[(extracted_df.miR_weights<0) & (extracted_df.miR_weights>=-0.3)]))
-    sub_list_1=np.log10(list(extracted_df.variance[extracted_df.miR_weights<-0.3]))
+    sub_list_3=np.log10(list(sub_df_3.variance))
+    sub_list_2=np.log10(list(sub_df_2.variance))
+    sub_list_1=np.log10(list(sub_df_1.variance))
 
     # Calculate and format the pvalue from the ttest between each category
     pval_g1_g2=stats.ttest_ind_from_stats(sub_list_1.mean(), sub_list_1.std(), len(sub_list_1),
@@ -657,7 +746,7 @@ def concatenate_miR_plots(file_path,thresh_order,plot_title):
 
 #%% Wrapper functions for analysis
 
-def wrapper_miRNA_boxplot_analysis(cell_line,replicates,layers,target_folder,variance_param,miRNA_thresh_list,save_path='',gene_selection='all',single_rep=False):
+def wrapper_miRNA_boxplot_analysis(cell_line,replicates,layers,target_folder,variance_param,miRNA_thresh_list,save_path='',gene_selection='all',single_rep=False,data_retrieval=False):
     """
     Wrapper which enables the plotting of miRNA boxplots for either single replicates or
     merged replicates. The wrapper function takes in a list of miRNA thresholds
@@ -698,6 +787,9 @@ def wrapper_miRNA_boxplot_analysis(cell_line,replicates,layers,target_folder,var
     single_rep : Boolean, optional
         Boolean stating if the given 'target_folder' is a single replicate or not.
         The default is False.
+    data_retrieval : Boolean, optional
+        If set to true, nothing will be saved. The results of the analysis will be
+        returned by the wrapper.
 
     Returns
     -------
@@ -719,6 +811,9 @@ def wrapper_miRNA_boxplot_analysis(cell_line,replicates,layers,target_folder,var
     
     #Get expression values
     exp_values=my_utils.get_vlm_values(cell_line,layers,target_folder,get_mean=False)
+
+    #Prepare variable for data retrieval
+    dta_retrieved={}
 
     #Convert to proper format
     variance_df = pd.DataFrame.from_dict(variance_dict)
@@ -764,22 +859,25 @@ def wrapper_miRNA_boxplot_analysis(cell_line,replicates,layers,target_folder,var
         keys.remove('miRNAs')
         
         #Plot the boxplots
-        for key in keys:
-            my_name='miR_'+key
-            create_miRweight_boxplot(vari_df=variance_df, target_key=key, cell_line=cell_line,plot_name=my_name,miR_thresh=miRNA_thresh,delay_cutoff=None,save_path=save_path)
-            expression_bar_plot(miR_dta_dict,miRNA_thresh,'spliced',save_path)
-            expression_bar_plot(miR_dta_dict,miRNA_thresh,'unspliced',save_path)
-        #Save text res
-        with open(save_path+'/'+miRNA_thresh+'_genes_used_summary.txt', 'w') as f:
-            f.write(text_res)
-
+        if data_retrieval==False:
+            for key in keys:
+                my_name='miR_'+key
+                create_miRweight_boxplot(vari_df=variance_df, target_key=key, cell_line=cell_line,plot_name=my_name,miR_thresh=miRNA_thresh,delay_cutoff=None,save_path=save_path)
+                expression_bar_plot(miR_dta_dict,miRNA_thresh,'spliced',save_path)
+                expression_bar_plot(miR_dta_dict,miRNA_thresh,'unspliced',save_path)
+            #Save text res
+            with open(save_path+'/'+miRNA_thresh+'_genes_used_summary.txt', 'w') as f:
+                f.write(text_res)
+        else:
+            dta_retrieved[miRNA_thresh]=variance_df.copy()
     
         #Update gene exclusion list
         result_df=variance_df.copy()
                 
-        save_name=save_path+'/'+miRNA_thresh+'_data_results.csv'
-        result_df.to_csv(save_name,index=False)
-        
+        if data_retrieval==False:
+            save_name=save_path+'/'+miRNA_thresh+'_data_results.csv'
+            result_df.to_csv(save_name,index=False)
+            
         idx_genes_with_weights=list(np.where(result_df.weight!=0)[0])
         new_gene_exclusion=result_df.iloc[idx_genes_with_weights]
         new_gene_exclusion=list(new_gene_exclusion.gene_names)
@@ -789,7 +887,237 @@ def wrapper_miRNA_boxplot_analysis(cell_line,replicates,layers,target_folder,var
         else:
             for gene in new_gene_exclusion:
                 gene_exclusion_list.append(gene)
+    
+    if data_retrieval==True:
+        return dta_retrieved
+
+
+def miRNA_analysis_data_retrieval(cell_line,replicates,layers,target_folder,variance_param,miRNA_thresh_list,gene_selection,do_log10=False,delay_key=None,single_rep=False):
+    """
+    Function which peforms miRNA analysis and returns the data in the form of a 
+    dictionnary sorted based on predetermined weights and provided RPM threshodls
+    via the miRNA_thresh_list param.
+    
+    The order in which thresholds are given is therefore important, where the likely
+    utility of the function is to give the larger thresholds first and make your way 
+    down to the smaller threhsolds.
+    
+    Each threshold must have the associated file in 'data_files/miRNA_files/categorized '
+    
+    Function written by Yohan Lefol
+
+    Parameters
+    ----------
+    cell_line : string
+        Indicates the cell linebing used.
+    replicates : list
+        list of strings indicating the replicates belonging to the cell line.
+    layers : list
+        list of strings for the layers used (likely ['spliced','unspliced'].
+    target_folder : string
+        Either a specific replciate or folder group (ex:A_B) showing where the data
+        will be fetched from.
+    variance_param : string
+        Can be 'All', 'Phases', or 'Both'. This indicates which groupings will
+        be plotted for the miRNA boxplots, where 'All' is all cells, 'phases' will
+        split cells into their found cell cycle phases, and 'Both' will do both
+        of the described methods
+    miRNA_thresh_list : list
+        List of thresholds (ex: 100_1000) Thresholds are executed sequentially based
+        on ordering in the provided list.
+    gene_selection : list, optional
+        A list of genes to use in the analysis. The default is 'all'
+    single_rep : Boolean, optional
+        Boolean stating if the given 'target_folder' is a single replicate or not.
+        The default is False.
+
+    Returns
+    -------
+    None.
+
+    """
+    #Target scanfile
+    TS_path='data_files/miRNA_files/TS_files/Predicted_Targets_Context_Scores.default_predictions.txt'
+    
+    #Get main data
+    mean_dict,CI_dict,bool_dict,count_dict,boundary_dict=my_utils.get_CI_data(cell_line,layers,target_folder,gene_selection)
+    gene_dict,variance_dict=prep_variances_for_TS(mean_dict,boundary_dict,keys_to_use=variance_param)
+    
+
+    #Prepare variable for data retrieval
+    variability_dict={}
+
+    #Convert to proper format
+    variance_df = pd.DataFrame.from_dict(variance_dict)
+    variance_df['gene_names']=variance_df.index
+    
+    gene_exclusion_list=[]
+    miR_dta_dict={}
+    for miRNA_thresh in miRNA_thresh_list:
+        miR_dta_dict[miRNA_thresh]={}
+        
+        #Perform miRNA analysis
+        path_miRNA='data_files/miRNA_files/categorized/'+cell_line+'_miRNA_'+str(miRNA_thresh)+'.csv'
+        miRNA_pd=pd.read_csv(path_miRNA)
+        miRNA_list=list(miRNA_pd.found)
+        variance_df,text_res=target_scan_analysis(TS_path,genes=variance_df,cell_line=cell_line,miR_thresh=miRNA_thresh,miRNA_list=miRNA_list)
+        #Remove genes in necessary
+        if len(gene_exclusion_list) != 0:
+            good_idx=list(np.where(~variance_df["gene_names"].isin(gene_exclusion_list)==True)[0])
+            variance_df=variance_df.iloc[good_idx]
+
+
+        variability_dict[miRNA_thresh]=variance_df.copy()
+
+        #Update gene exclusion list
+        idx_genes_with_weights=list(np.where(variance_df.weight!=0)[0])
+        new_gene_exclusion=variance_df.iloc[idx_genes_with_weights]
+        new_gene_exclusion=list(new_gene_exclusion.gene_names)
+        
+        if len(gene_exclusion_list) == 0:
+            gene_exclusion_list=new_gene_exclusion
+        else:
+            for gene in new_gene_exclusion:
+                gene_exclusion_list.append(gene)
+        
+        
+        
+      #Add delay data
+    delay_dta=pd.read_csv('data_files/data_results/delay_genes/'+cell_line+'/'+target_folder+'_delay_genes.csv')
+    for thresh in miRNA_thresh_list:
+        variability_dict[thresh]=variability_dict[thresh].merge(delay_dta,left_index=True,right_on='gene_name')
+        variability_dict[thresh].index=variability_dict[thresh].gene_names
+    
+
+    if delay_key is not None:
+        target_key=delay_key
+    else:
+        target_key=variance_param
+    
+    #Somewhere below we are retrieving the wrong lists. Are we even filtering it?
+    data_dict={}
+    for RPM_thresh in miRNA_thresh_list:
+        for miR_weight in range(3):
+            extracted_df=variability_dict[RPM_thresh]
+            if miR_weight==0:
+                if do_log10:
+                    sub_list=np.log10(list(extracted_df[target_key][extracted_df['weight']<-0.3]))
+                else:
+                    sub_list=list(extracted_df[target_key][extracted_df['weight']<-0.3])
+    
+                char_weight='< -0.3'
+            elif miR_weight==1:
+                if do_log10:
+                    sub_list=np.log10(list(extracted_df[target_key][(extracted_df['weight']<0) & (extracted_df['weight']>=-0.3)]))            
+                else:
+                    sub_list=list(extracted_df[target_key][(extracted_df['weight']<0) & (extracted_df['weight']>=-0.3)])           
                 
+                char_weight='>= -0.3'
+            elif miR_weight==2:
+                if do_log10:
+                    sub_list=np.log10(list(extracted_df[target_key][extracted_df['weight']==0]))
+                else:
+                    sub_list=list(extracted_df[target_key][extracted_df['weight']==0])
+                
+                char_weight='0'
+            else:
+                print('Something went wrong')
+            if char_weight not in data_dict.keys():
+                data_dict[char_weight]=[]
+                data_dict[char_weight+'_geneNum']=''
+            data_dict[char_weight]=data_dict[char_weight]+[sub_list]
+            if RPM_thresh==miRNA_thresh_list[-1]:
+                data_dict[char_weight+'_geneNum']=data_dict[char_weight+'_geneNum']+str(len(sub_list))+' '
+            else:
+                data_dict[char_weight+'_geneNum']=data_dict[char_weight+'_geneNum']+str(len(sub_list))+' | '
+    
+    return data_dict
+
+
+def wrapper_miRNA_boxplot_analysis_V2(input_data,miRNA_thresh_list,save_name,target_key='All',
+                                      include_fliers=False,ylabel='ylabel',plot_title='plot_title'):
+    
+    miR_dta=input_data.copy()    
+    #Get statistics
+    found_stats=calculate_siginificance_between_miRNA_groups(miR_dta,miRNA_thresh_list)
+    
+    miR_dta['< -0.3_geneNum']=miR_dta['< -0.3_geneNum']+'\n< -0.3'
+    miR_dta['>= -0.3_geneNum']=miR_dta['>= -0.3_geneNum']+'\n>= -0.3'
+    miR_dta['0_geneNum']=miR_dta['0_geneNum']+'\n0'
+    
+    xlabels=[miR_dta['< -0.3_geneNum'],miR_dta['>= -0.3_geneNum'],miR_dta['0_geneNum']]
+    data_groups = [miR_dta['< -0.3'], miR_dta['>= -0.3'], miR_dta['0']]
+    
+    
+    mpl.rcParams['figure.dpi'] = 600
+    
+    #Legend params
+    colors = ['pink', 'lightblue', 'lightgreen']
+    RPM_1 = mpatches.Patch(color=colors[0], label='1000_None')
+    RPM_2 = mpatches.Patch(color=colors[1], label='1000_100')
+    RPM_3 = mpatches.Patch(color=colors[2], label='100_0')
+    
+    # set up labels
+    labels_list = xlabels
+    width       = 1/len(labels_list)
+    xlocations  = [ x*((1+ len(data_groups))*width) for x in range(len(data_groups[0])) ]
+    
+    #Set-up figure params
+    ax = plt.gca()
+    ax.grid(True, linestyle='dotted')
+    ax.set_axisbelow(True)
+    
+    # Find position of each box
+    space = len(data_groups)/2
+    group_positions = []
+    for num, dg in enumerate(data_groups):    
+        _off = (0 - space + (0.5+num))
+        group_positions.append([x+_off*(width+0.01) for x in xlocations])
+    
+    #Plot the boxes
+    extract_lines={}
+    i=0
+    for dg, pos, c in zip(data_groups, group_positions, colors):
+        
+        boxes = ax.boxplot(dg, 
+                    labels=['']*len(labels_list),
+                    positions=pos, 
+                    widths=width, 
+                    boxprops=dict(facecolor=c),
+                    medianprops=dict(color='grey'),
+                    showfliers=include_fliers,
+                    patch_artist=True,
+                    )
+        extract_lines[i] = boxes
+        i=i+1
+    line_loc=find_boxplot_line_location(extract_lines,found_stats)
+    
+    #Add legend and adjust labels
+    plt.legend(handles=[RPM_1,RPM_2,RPM_3],loc='center left', bbox_to_anchor=(1, 0.5),title='RPM categories')
+    
+    plt.xlabel('Gene number and miR weight category')
+    plt.ylabel(ylabel)
+    plt.title(plot_title)
+    
+    #Order is height, start, end, stat
+    for line in line_loc.keys():
+        plt.hlines(line_loc[line][0],line_loc[line][1],line_loc[line][2],colors='red')
+        mid_x=(line_loc[line][1]+line_loc[line][2])/2
+        text="{0:.1e}".format(line_loc[line][3])
+        plt.text(mid_x,line_loc[line][0],s=text,va='bottom',ha='center',size=5 )
+    
+    
+    # plt.hlines(113,-0.34,0,colors='red')
+    # plt.hlines(201,0,0.34,colors='red')
+    ax.set_xticks(xlocations)
+    ax.set_xticklabels(labels_list, rotation=0 )
+    # plt.show()
+    plt.savefig(save_name,bbox_inches='tight')
+    plt.clf()
+    plt.close("all")
+    # plt.show()
+    gc.collect()
+    
                 
 #%% statistical analysis functions
 

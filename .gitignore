@@ -42,6 +42,7 @@ figures
 
 #Ignore results
 all_figures
+HaCaT_miR_res
 
 #Ignore big TCGA file
 R_scripts/TCGA_all_dta.rda

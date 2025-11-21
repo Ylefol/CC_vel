@@ -108,14 +108,14 @@ for loop_number in range(int(sys.argv[2])):
     
     
     my_func.save_iteration_data(vlm,spli_dict, cell_line=cell_line_var, replicate=replicate, layer='spliced',file_name=str(loop_number+1), save_choice='vel')
-    #my_func.save_iteration_data(vlm,unspli_dict, cell_line=cell_line_var, replicate=replicate, layer='unspliced',file_name=str(loop_number+1), save_choice='vel')
+    my_func.save_iteration_data(vlm,unspli_dict, cell_line=cell_line_var, replicate=replicate, layer='unspliced',file_name=str(loop_number+1), save_choice='vel')
 
     
-    #my_func.save_iteration_data(vlm,spli_mean_dict, cell_line=cell_line_var, replicate=replicate, layer='spliced',file_name=str(loop_number+1), save_choice='exp_mean')
-    #my_func.save_iteration_data(vlm,unspli_mean_dict, cell_line=cell_line_var, replicate=replicate, layer='unspliced',file_name=str(loop_number+1), save_choice='exp_mean')
+    my_func.save_iteration_data(vlm,spli_mean_dict, cell_line=cell_line_var, replicate=replicate, layer='spliced',file_name=str(loop_number+1), save_choice='exp_mean')
+    my_func.save_iteration_data(vlm,unspli_mean_dict, cell_line=cell_line_var, replicate=replicate, layer='unspliced',file_name=str(loop_number+1), save_choice='exp_mean')
 
-    #my_func.save_iteration_data(vlm,None, cell_line=cell_line_var, replicate=replicate, layer='spliced',file_name=str(loop_number+1), save_choice='exp')
-    #my_func.save_iteration_data(vlm,None, cell_line=cell_line_var, replicate=replicate, layer='unspliced',file_name=str(loop_number+1), save_choice='exp')
+    my_func.save_iteration_data(vlm,None, cell_line=cell_line_var, replicate=replicate, layer='spliced',file_name=str(loop_number+1), save_choice='exp')
+    my_func.save_iteration_data(vlm,None, cell_line=cell_line_var, replicate=replicate, layer='unspliced',file_name=str(loop_number+1), save_choice='exp')
     
     
 

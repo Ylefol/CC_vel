@@ -2514,31 +2514,31 @@ def find_phase_association(gene_df,mean_dict,CI_dict,boundary_dict,vlm_dict,laye
                 phase_association['peak_vel'].append('NA')
                 phase_association['peak_exp'].append('NA')
                 phase_association['start_vel'].append('NA')
-        else:
-            #If low CI we want to search for when the layer has it's max value and when the CI is above 0
-            if CI=='low_CI':
-                found_idx['peak_vel']=np.where(mean_dict[layer][gene]==max(mean_dict[layer][gene]))[0]
-                found_idx['peak_exp']=np.where(vlm_dict[layer][gene]==max(vlm_dict[layer][gene]))[0]
-                found_idx['start_vel']=np.where(CI_dict[layer][CI][gene]>0)[0]
-            #If up CI we search for the layers minimum value and when the CI is below 0
-            elif CI=='up_CI':
-                found_idx['peak_vel']=np.where(mean_dict[layer][gene]==min(mean_dict[layer][gene]))[0]
-                found_idx['peak_exp']=np.where(vlm_dict[layer][gene]==min(vlm_dict[layer][gene]))[0]
-                found_idx['start_vel']=np.where(CI_dict[layer][CI][gene]<0)[0]
-            for key in list(found_idx.keys()):
-                if len(found_idx[key])==0:
-                    found_phase='NA'
-                else:
-                    val=found_idx[key][0]
-                    if val>= boundary_dict['G2M'] and val < boundary_dict['G1']:
-                        found_phase='G2M'
-                    elif val>=boundary_dict['G1'] and val < boundary_dict['S']:
-                        found_phase='G1'
-                    elif val>=boundary_dict['S']:
-                        found_phase='S'
-                #Return phases found for each gene in the same order that the genes
-                #were provided
-                phase_association[key].append(found_phase)
+            else:
+                #If low CI we want to search for when the layer has it's max value and when the CI is above 0
+                if CI=='low_CI':
+                    found_idx['peak_vel']=np.where(mean_dict[layer][gene]==max(mean_dict[layer][gene]))[0]
+                    found_idx['peak_exp']=np.where(vlm_dict[layer][gene]==max(vlm_dict[layer][gene]))[0]
+                    found_idx['start_vel']=np.where(CI_dict[layer][CI][gene]>0)[0]
+                #If up CI we search for the layers minimum value and when the CI is below 0
+                elif CI=='up_CI':
+                    found_idx['peak_vel']=np.where(mean_dict[layer][gene]==min(mean_dict[layer][gene]))[0]
+                    found_idx['peak_exp']=np.where(vlm_dict[layer][gene]==min(vlm_dict[layer][gene]))[0]
+                    found_idx['start_vel']=np.where(CI_dict[layer][CI][gene]<0)[0]
+                for key in list(found_idx.keys()):
+                    if len(found_idx[key])==0:
+                        found_phase='NA'
+                    else:
+                        val=found_idx[key][0]
+                        if val>= boundary_dict['G2M'] and val < boundary_dict['G1']:
+                            found_phase='G2M'
+                        elif val>=boundary_dict['G1'] and val < boundary_dict['S']:
+                            found_phase='G1'
+                        elif val>=boundary_dict['S']:
+                            found_phase='S'
+                    #Return phases found for each gene in the same order that the genes
+                    #were provided
+                    phase_association[key].append(found_phase)
     return phase_association
 
 def create_t_test_rank_method(gene_df,iterations,replicates,mean_dict,CI_dict,boundary_dict,vlm_dict,layer='spliced',CI='low_CI'):

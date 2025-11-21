@@ -112,9 +112,9 @@ adata=my_func.selection_method(adata,highly_variable=False,CC_path=CC_path)
 my_func.check_cols_and_rows(adata)
 
 my_func.perform_scanpy_pca(adata,compute=True,exclude_gene_counts=False,exclude_CC=False,save_path=main_path,sub_folder='initial')
-sc.pp.regress_out(adata,['n_counts'])
+# sc.pp.regress_out(adata,['n_counts'])
 
-my_func.perform_scanpy_pca(adata,compute=True,exclude_gene_counts=False,exclude_CC=False, save_path=main_path,sub_folder='regressed')
+# my_func.perform_scanpy_pca(adata,compute=True,exclude_gene_counts=False,exclude_CC=False, save_path=main_path,sub_folder='regressed')
 # my_func.plot_phase_bar_dist(adata, 20, return_data=False, plot_path=main_path+"/figures/pca_bar_line_plots/regressed")
 
 
