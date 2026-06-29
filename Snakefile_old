@@ -10,7 +10,7 @@ rule basic_filter_and_reassignment:
     input:
         "data_files/initial_data/loom_files/{cell_line}_{replicate}.loom"
     params:
-        script=workflow.basedir + "/snake_scripts/snake_reassignment.py",
+        script="snake_scripts/snake_reassignment.py",
         barcodes="data_files/initial_data/barcodes/{cell_line}_{replicate}_barcodes.txt", #Can be None
         mito_genes="data_files/initial_data/chrM_unique.txt",
         CC_genes="data_files/initial_data/Original_cell_cycle_genes_with_new_candidates.csv"
@@ -29,8 +29,8 @@ rule velocyto_CC:
     input:
         "data_files/phase_reassigned/CC_{cell_line}_{replicate}.loom"
     params:
-        script=workflow.basedir + '/snake_scripts/snake_velocyto.py',
-        num_k=50
+        script='snake_scripts/snake_velocyto.py',
+        num_k=550
     output:
         boundaries_csv="data_files/boundary_data/{cell_line}_{replicate}_boundaries.csv"
     log:
@@ -50,9 +50,9 @@ rule velocyto_iterations:
     input:
         "data_files/phase_reassigned/AG_{cell_line}_{replicate}.loom"
     params:
-        script=workflow.basedir + '/snake_scripts/snake_vel_iterations.py',
+        script='snake_scripts/snake_vel_iterations.py',
         number_of_iterations=5,
-        num_k=50 
+        num_k=550 
     output:
         vel_Iterations=directory('data_files/confidence_intervals/{cell_line}/{replicate}/Velocity_iterations')
     log:
@@ -70,7 +70,7 @@ rule compute_merged_CIs:
     input:
         'data_files/confidence_intervals/{cell_line}'
     params:
-        script=workflow.basedir + '/snake_scripts/snake_merge_reps_calculate_CIs.py',
+        script='snake_scripts/snake_merge_reps_calculate_CIs.py',
         number_of_iterations=5,
         z_CI_value=2.576
     output:
@@ -86,7 +86,7 @@ rule t_test_delay:
     input:
         'data_files/confidence_intervals/{cell_line}/merged_results/{replicate}'
     params:
-        script=workflow.basedir + '/snake_scripts/snake_gene_rank_delay.py',
+        script='snake_scripts/snake_gene_rank_delay.py',
         num_iters=5 
     output:
         ranked_genes='data_files/data_results/rank/{cell_line}/{replicate}_ranked_genes.csv',
@@ -105,7 +105,7 @@ rule miRNA_prep:
     input:
         "data_files/miRNA_files/non_categorized/{cell_line}_miRNA.csv"
     params:
-        script=workflow.basedir + "/snake_scripts/snake_miRNA_prep.py"
+        script="snake_scripts/snake_miRNA_prep.py"
     output:
         "data_files/miRNA_files/categorized/{cell_line}_miRNA_{min_max_threshold}.csv"
     log:

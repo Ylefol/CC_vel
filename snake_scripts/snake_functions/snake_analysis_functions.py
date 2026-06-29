@@ -920,36 +920,17 @@ def plot_ax_lines_phase_portrait_no_vlm(x_axis,orientation,boundary_dict,v_lines
     if v_lines==True:
         for key,order in boundary_dict.items():
             plt.axvline(order[0],c='k',lw=2)
-    
-    #Sorts based on the order
-    phase_order=sorted(boundary_dict,key=lambda k: boundary_dict[k][0])
-    #Extracts the start and end point of each phase, then plots them as horizontal lines 
-    #At the 0 point of the plot (bottom of the plot)
-    for inc,p in enumerate(phase_order):
-        if orientation == 'G1':
-            if p=='G1':
-                color_used=boundary_dict['G2M'][1]
-            elif p== 'S':
-                color_used=boundary_dict['G1'][1]
-            else:
-                color_used=boundary_dict['S'][1]
-        if orientation=='G2M':
-            if p=='G1':
-                color_used=boundary_dict['S'][1]
-            elif p== 'S':
-                color_used=boundary_dict['G2M'][1]
-            else:
-                color_used=boundary_dict['G1'][1] 
-        if inc==0:
-            plt.hlines(y_axis_loc,0,boundary_dict[p][0], colors=color_used, linestyles='solid',lw=6)
-        else:
-            plt.hlines(y_axis_loc,boundary_dict[phase_order[inc-1]][0],boundary_dict[p][0], colors=color_used, linestyles='solid',lw=6)
-        
-        if inc==2 and boundary_dict[p][0]<np.max(x_axis):
-            # if orientation == 'G1':
-            plt.hlines(y_axis_loc,boundary_dict[phase_order[inc]][0],np.max(x_axis), colors=boundary_dict[p][1], linestyles='solid',lw=6)
-            # if orientation == 'G2M':
-            #     plt.hlines(0,boundary_dict[phase_order[inc]][0],np.max(vlm.ca['new_order']), colors=boundary_dict[phase_order[0]][1], linestyles='solid',lw=8)
+
+    #Colors the three phase segments - uses the same convention as plot_vels_and_CIs/plot_counts
+    num_cells=np.max(x_axis)
+    if orientation == 'G1':
+        plt.hlines(y_axis_loc,0,boundary_dict['G1'][0], colors=boundary_dict['G2M'][1], linestyles='solid',lw=6)
+        plt.hlines(y_axis_loc,boundary_dict['G1'][0],boundary_dict['S'][0], colors=boundary_dict['G1'][1], linestyles='solid',lw=6)
+        plt.hlines(y_axis_loc,boundary_dict['S'][0],num_cells, colors=boundary_dict['S'][1], linestyles='solid',lw=6)
+    else:#orientation == 'G2M'
+        plt.hlines(y_axis_loc,0,boundary_dict['G1'][0], colors=boundary_dict['S'][1], linestyles='solid',lw=6)
+        plt.hlines(y_axis_loc,boundary_dict['G1'][0],boundary_dict['G2M'][0], colors=boundary_dict['G1'][1], linestyles='solid',lw=6)
+        plt.hlines(y_axis_loc,boundary_dict['G2M'][0],num_cells, colors=boundary_dict['G2M'][1], linestyles='solid',lw=6)
 
 def create_gap_dict(bool_df,gene_name):
     """
@@ -1553,8 +1534,11 @@ def plot_counts(counts_dict,gene_name,subplot_coordinates,boundary_dict,reverse)
     #This plots the phase boundaries
     colors_dict = {'G1':np.array([52, 127, 184]),'S':np.array([37,139,72]),'G2M':np.array([223,127,49]),}
     colors_dict = {k:v/256 for k, v in colors_dict.items()}
-    num_cells = len(counts_dict['spliced'])
-    
+    num_cells = len(spli_counts[gene_name])
+
+    for key,order in boundary_dict.items():
+        plt.axvline(order,c='k',lw=2)
+
     if boundary_dict['G2M']==0:
         plt.hlines(-1.25,0,boundary_dict['G1'], colors=colors_dict['G2M'], linestyles='solid',lw=6)
         plt.hlines(-1.25,boundary_dict['G1'],boundary_dict['S'], colors=colors_dict['G1'], linestyles='solid',lw=6)
@@ -2530,12 +2514,26 @@ def find_phase_association(gene_df,mean_dict,CI_dict,boundary_dict,vlm_dict,laye
                         found_phase='NA'
                     else:
                         val=found_idx[key][0]
-                        if val>= boundary_dict['G2M'] and val < boundary_dict['G1']:
-                            found_phase='G2M'
-                        elif val>=boundary_dict['G1'] and val < boundary_dict['S']:
-                            found_phase='G1'
-                        elif val>=boundary_dict['S']:
-                            found_phase='S'
+                        # if val>= boundary_dict['G2M'] and val < boundary_dict['G1']:
+                        #     found_phase='G2M'
+                        # elif val>=boundary_dict['G1'] and val < boundary_dict['S']:
+                        #     found_phase='G1'
+                        # elif val>=boundary_dict['S']:
+                        #     found_phase='S'
+                        if boundary_dict['G2M'] < boundary_dict['S']:  # standard: G2M=0
+                            if val < boundary_dict['G1']:
+                                found_phase='G2M'
+                            elif val < boundary_dict['S']:
+                                found_phase='G1'
+                            else:
+                                found_phase='S'
+                        else:  # alt: S=0
+                            if val < boundary_dict['G1']:
+                                found_phase='S'
+                            elif val < boundary_dict['G2M']:
+                                found_phase='G1'
+                            else:
+                                found_phase='G2M'
                     #Return phases found for each gene in the same order that the genes
                     #were provided
                     phase_association[key].append(found_phase)

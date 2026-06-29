@@ -210,48 +210,35 @@ def filter_based_on_spliced_unspliced_ratio(adata,layer_to_use,min_percent=None,
     #Subsets the adata object
     adata._inplace_subset_obs(layer_subset)
     
-from PIL import Image
-def get_unspli_and_mito_thresholds(cell_line_var,samp_var):
-    """
-    A function which will show images and ask the user to input
-    the maximum and minimum unspliced thresholds to use in the filtering
-    of unspliced reads. It will also ask the users input for the mitochondrial
-    threhsold to use.
-    
-    Function written by Yohan Lefol
+def get_unspli_and_mito_thresholds(adata, MT_list, n_mads=3):
+    X = adata.X
+    total_reads = np.sum(X, axis=1).A1.astype(float)
 
-    Parameters
-    ----------
-    cell_line_var : string
-        a string indicating the cell line used.
-    samp_var : string
-        a string indicating the replicate used.
+    unspliced = np.sum(adata.layers['unspliced'], axis=1).A1.astype(float)
+    unspliced_pct = np.where(total_reads > 0, unspliced / total_reads * 100, 0)
 
-    Returns
-    -------
-    max_unspli : int
-        maximum unspliced threhsold inputted by the user.
-    min_unspli : int
-        minimum unspliced threhsold inputted by the user.
-    mito_thresh : int
-        mtochodinrial threhsold inputted by the user.
+    MT_bool = np.isin(adata.var_names, MT_list)
+    mito = np.sum(X[:, MT_bool], axis=1).A1.astype(float)
+    mito_pct = np.where(total_reads > 0, mito / total_reads * 100, 0)
 
-    """
-    img_1=Image.open('all_figures/'+cell_line_var+'/'+samp_var+'/figures/violin_plots/Pre/percent_MT.png')
-    img_1.show()
-    img_2=Image.open('all_figures/'+cell_line_var+'/'+samp_var+'/figures/violin_plots/Pre/unspliced.png')
-    img_2.show()
-    print("\n#######################################################################\n")
-    print("What is the upper unspliced threshold in percentage: ")
-    max_unspli=int(input())
-    print("What is the minimum unspliced threshold in percentage: ")
-    min_unspli=int(input())
-    print("What is the mitochondrial reads threshold in percentage: ")
-    mito_thresh=int(input())
-    print("\n#######################################################################\n")
-    img_1.close()
-    img_2.close()
-    
+    def mad_threshold(arr, n, upper=True):
+        median = np.median(arr)
+        mad = np.median(np.abs(arr - median))
+        return median + n * mad if upper else max(0, median - n * mad)
+
+    max_unspli = mad_threshold(unspliced_pct, n_mads, upper=True)
+    min_unspli = mad_threshold(unspliced_pct, n_mads, upper=False)
+    mito_thresh = mad_threshold(mito_pct, n_mads, upper=True)
+
+    print("\n#######################################################################")
+    print(f"Auto thresholds (median ± {n_mads}×MAD):")
+    print(f"  max unspliced : {max_unspli:.2f}%")
+    print(f"  min unspliced : {min_unspli:.2f}%")
+    print(f"  mito threshold: {mito_thresh:.2f}%")
+    print("#######################################################################\n")
+
+    return max_unspli, min_unspli, mito_thresh
+
     return max_unspli,min_unspli,mito_thresh
 
 
@@ -1597,6 +1584,8 @@ def find_G1_crossover(list_of_phases,orientation,S_G2M_crosses,look_for):
     list_of_phases=np.roll(list_of_phases,-roll_val)
     #Adjust location of target crossover based on the roll
     target_cross=S_G2M_crosses['target_cross']
+    if target_cross==len(list_of_phases)-1:
+        target_cross=1
     target_cross=target_cross-roll_val
     if target_cross<0:
         target_cross=len(list_of_phases)+target_cross

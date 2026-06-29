@@ -62,7 +62,7 @@ filter_numbers['cells'].append(len(adata.obs))
 my_func.scanpy_pp_plots(adata,MT_list,True,True,True,path=main_path,sub_folder='Pre')
 
 #Get threshold for unspliced and mirochondrial filters
-max_unspli,min_unspli,mito_thresh=my_func.get_unspli_and_mito_thresholds(cell_line_var,samp_var)
+max_unspli,min_unspli,mito_thresh=my_func.get_unspli_and_mito_thresholds(adata,MT_list)
 
 #Filter cells based on maximum unspliced percentage
 my_func.filter_based_on_spliced_unspliced_ratio(adata,'unspliced',max_percent=max_unspli)

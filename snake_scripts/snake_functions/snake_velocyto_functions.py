@@ -331,7 +331,12 @@ def create_boundary_dict(vlm):
     
     # new_order=np.concatenate([arr_2,arr_1])
     vlm.ca["new_order"]=vlm.ca["order"]
-    
+
+    total_cells = len(vlm.ca["CellID"])
+    for phase in boundary_dict:
+        if boundary_dict[phase][0] >= total_cells:
+            boundary_dict[phase][0] = 0
+
     return boundary_dict
 
 
